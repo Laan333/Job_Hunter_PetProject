@@ -21,7 +21,7 @@ from app.settings_service import ensure_defaults, get_int, get_str, get_value, s
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION_MATCH = "v15_1"
+PROMPT_VERSION_MATCH = "v15_2"
 PROMPT_VERSION_COVER = "cover_v1"
 
 

@@ -15,7 +15,8 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
-  Bell
+  Bell,
+  Trophy
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -25,6 +26,7 @@ const navigation = [
   { name: 'Поисковые запросы', href: '/dashboard/search', icon: Search },
   { name: 'Моё резюме', href: '/dashboard/resume', icon: FileText },
   { name: 'Аналитика', href: '/dashboard/analytics', icon: BarChart3 },
+  { name: 'Матч-баллы', href: '/dashboard/match-scores', icon: Trophy },
   { name: 'Уведомления', href: '/dashboard/notifications', icon: Bell },
   { name: 'Настройки', href: '/dashboard/settings', icon: Settings },
 ]

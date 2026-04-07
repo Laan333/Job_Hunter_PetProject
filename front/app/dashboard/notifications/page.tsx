@@ -36,8 +36,13 @@ export default function NotificationsPage() {
   const onRead = async (n: AppNotification) => {
     if (n.readAt) return
     try {
-      const updated = await markNotificationRead(n.id)
-      setItems((prev) => prev.map((x) => (x.id === n.id ? updated : x)))
+      if (filter === 'unread') {
+        await markNotificationRead(n.id)
+        await load()
+      } else {
+        const updated = await markNotificationRead(n.id)
+        setItems((prev) => prev.map((x) => (x.id === n.id ? updated : x)))
+      }
     } catch {
       toast.error('Ошибка')
     }
@@ -46,7 +51,7 @@ export default function NotificationsPage() {
   const onReadAll = async () => {
     try {
       await markAllNotificationsRead()
-      void load()
+      await load()
       toast.success('Все отмечены прочитанными')
     } catch {
       toast.error('Ошибка')

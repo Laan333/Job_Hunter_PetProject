@@ -45,7 +45,15 @@ def run_scheduled_matching(db: Session) -> dict[str, int]:
         return {"analyzed": 0, "notifications": 0}
 
     threshold = get_int(db, "high_match_threshold", s.default_high_match_threshold)
-    tg_on = get_bool(db, "telegram_enabled", False) and get_bool(db, "notify_on_high_match", True)
+    telegram_enabled = get_bool(db, "telegram_enabled", False)
+    notify_on_high_match = get_bool(db, "notify_on_high_match", True)
+    tg_on = telegram_enabled and notify_on_high_match
+    if not tg_on:
+        logger.info(
+            "Scheduled match: telegram disabled (telegram_enabled=%s, notify_on_high_match=%s)",
+            telegram_enabled,
+            notify_on_high_match,
+        )
 
     analyzed_subq = db.query(VacancyAnalysis.vacancy_id).filter(VacancyAnalysis.resume_id == active.id)
     candidates = (
@@ -120,10 +128,30 @@ def run_scheduled_matching(db: Session) -> dict[str, int]:
                         f"Матч {parsed.score}/100: {v.title}\n{v.company}\n"
                         f"{parsed.summary_for_notification}\n{link_base}/dashboard/vacancies"
                     )
-                    mid = send_message(msg)
-                    if mid:
-                        n.telegram_message_id = mid
+                    send_res = send_message(msg)
+                    if send_res["ok"] and send_res["message_id"]:
+                        n.telegram_message_id = send_res["message_id"]
                         n.telegram_sent_at = datetime.now(timezone.utc)
+                        logger.info(
+                            "Telegram sent for notification=%s vacancy=%s message_id=%s",
+                            n.id,
+                            v.id,
+                            send_res["message_id"],
+                        )
+                    elif send_res["skipped"]:
+                        logger.info(
+                            "Telegram skipped for notification=%s vacancy=%s reason=%s",
+                            n.id,
+                            v.id,
+                            send_res["reason"],
+                        )
+                    else:
+                        logger.warning(
+                            "Telegram failed for notification=%s vacancy=%s reason=%s",
+                            n.id,
+                            v.id,
+                            send_res["reason"],
+                        )
             db.commit()
             analyzed += 1
         except Exception:
