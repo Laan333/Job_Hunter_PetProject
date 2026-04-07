@@ -50,9 +50,11 @@ export default function SettingsPage() {
     browserNotifications: true,
     notifyOnNewVacancies: true,
     notifyOnHighMatch: true,
+    telegramEnabled: false,
     highMatchThreshold: 70,
     llmProvider: 'openai' as 'openai' | 'gigachat' | 'none',
   })
+  const [telegramConfigured, setTelegramConfigured] = useState(false)
 
   const [isSaved, setIsSaved] = useState(false)
   const [testResults, setTestResults] = useState<{[key: string]: 'success' | 'error' | null}>({
@@ -80,9 +82,11 @@ export default function SettingsPage() {
           browserNotifications: Boolean(d.browserNotifications ?? prev.browserNotifications),
           notifyOnNewVacancies: Boolean(d.notifyOnNewVacancies ?? prev.notifyOnNewVacancies),
           notifyOnHighMatch: Boolean(d.notifyOnHighMatch ?? prev.notifyOnHighMatch),
+          telegramEnabled: Boolean(d.telegramEnabled ?? prev.telegramEnabled),
           highMatchThreshold: Number(d.highMatchThreshold ?? prev.highMatchThreshold),
           llmProvider: (d.llmProvider as 'openai' | 'gigachat' | 'none') ?? prev.llmProvider,
         }))
+        setTelegramConfigured(Boolean(d.telegramConfigured))
       } catch {
         toast.error('Не удалось загрузить настройки')
       }
@@ -99,6 +103,7 @@ export default function SettingsPage() {
         browserNotifications: settings.browserNotifications,
         notifyOnNewVacancies: settings.notifyOnNewVacancies,
         notifyOnHighMatch: settings.notifyOnHighMatch,
+        telegramEnabled: settings.telegramEnabled,
         highMatchThreshold: settings.highMatchThreshold,
         llmProvider: settings.llmProvider,
       }
@@ -358,6 +363,31 @@ export default function SettingsPage() {
                 <Switch
                   checked={settings.notifyOnNewVacancies}
                   onCheckedChange={(checked) => setSettings(prev => ({ ...prev, notifyOnNewVacancies: checked }))}
+                />
+              </div>
+
+              <Separator />
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-base font-medium">Telegram уведомления</Label>
+                    <Badge variant={telegramConfigured ? 'secondary' : 'destructive'}>
+                      {telegramConfigured ? 'Сконфигурирован' : 'Не настроен'}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Включает отправку в Telegram (парсинг/высокие совпадения)
+                  </p>
+                  {!telegramConfigured && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Укажите в .env: TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID, затем перезапустите API.
+                    </p>
+                  )}
+                </div>
+                <Switch
+                  checked={settings.telegramEnabled}
+                  onCheckedChange={(checked) => setSettings(prev => ({ ...prev, telegramEnabled: checked }))}
                 />
               </div>
 

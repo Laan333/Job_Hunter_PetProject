@@ -396,6 +396,7 @@ def _settings_response(db: Session) -> dict[str, Any]:
         "notifyOnHighMatch": get_bool(db, "notify_on_high_match", True),
         "highMatchThreshold": get_int(db, "high_match_threshold", s.default_high_match_threshold),
         "telegramEnabled": get_bool(db, "telegram_enabled", False),
+        "telegramConfigured": bool((s.telegram_bot_token or "").strip() and (s.telegram_chat_id or "").strip()),
         "matchAnalysisIntervalMinutes": match_interval,
         "llmMinIntervalSeconds": get_int(db, "llm_min_interval_seconds", s.default_llm_min_interval_seconds),
         "hhDailySyncTime": get_str(db, "hh_daily_sync_time", s.default_hh_sync_time),

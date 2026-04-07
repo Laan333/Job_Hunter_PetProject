@@ -97,8 +97,11 @@ def list_vacancies(
     if favorite_only:
         stmt = stmt.filter(Vacancy.is_favorite.is_(True))
     if search_text:
-        term = f"%{search_text.strip()}%"
-        if term != "%%":
+        # Tokenized search: "fastapi python" matches rows containing both terms
+        # in any searchable text field (not necessarily as one exact phrase).
+        tokens = [t.strip() for t in search_text.split() if t.strip()]
+        for token in tokens:
+            term = f"%{token}%"
             stmt = stmt.filter(
                 or_(
                     Vacancy.title.ilike(term),
