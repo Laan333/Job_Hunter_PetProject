@@ -166,7 +166,7 @@ export default function MatchScoresPage() {
             </Button>
           </div>
           <div className="flex items-center gap-2 ml-auto">
-            <span className="text-sm text-muted-foreground">Только релевантные (>=60)</span>
+            <span className="text-sm text-muted-foreground">Только релевантные (&gt;=60)</span>
             <Switch checked={relevantOnly} onCheckedChange={setRelevantOnly} />
           </div>
         </div>
