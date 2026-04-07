@@ -30,7 +30,11 @@ def create_app() -> FastAPI:
     """Application factory."""
 
     settings = get_settings()
-    app = FastAPI(title="Job Hunt Dashboard API", lifespan=lifespan)
+    app = FastAPI(
+        title="Job Hunt Dashboard API",
+        lifespan=lifespan,
+        redirect_slashes=False,
+    )
 
     origins = [o.strip() for o in settings.cors_allowed_origins.split(",") if o.strip()]
     if not origins:

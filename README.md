@@ -72,6 +72,8 @@ find_work/
 docker compose logs api
 ```
 
+Логи nginx: **`docker compose logs nginx`** (имя **сервиса** из `docker-compose.yml`, не имя контейнера).
+
 Если в логах была ошибка миграции (`DuplicateObject`, «таблица уже существует») и база в неизвестном состоянии, проще всего **сбросить том PostgreSQL** (данные удалятся) и поднять заново:
 
 ```bash
@@ -86,13 +88,17 @@ docker compose up -d --build
    - **`PUBLIC_URL`** — тот же origin, с которого открываете сайт в браузере (например `http://203.0.113.10:8080`).
    - **`CORS_ALLOWED_ORIGINS`** — список через запятую, **обязательно** включите тот же origin, иначе браузер заблокирует запросы к API.
 
-2. Проброс портов и фаервол: откройте **`HTTP_PORT`** (и при HTTPS — **`HTTPS_PORT`**) на хосте/роутере.
+2. Проброс портов и фаервол: откройте **`HTTP_PORT`** на хосте/роутере. Проброс HTTPS в базовом `docker-compose.yml` **не задаётся** (чтобы не занимать 8443 впустую). Для TLS см. ниже.
 
 3. **`NGINX_BIND=0.0.0.0`** (значение по умолчанию в `docker-compose`) — nginx слушает на всех интерфейсах хоста. Для привязки только к одному IP задайте, например, `NGINX_BIND=203.0.113.10`.
 
 4. **`NGINX_SERVER_NAMES`:** по умолчанию **`_`** (подходит для захода по IP). Для домена: `NGINX_SERVER_NAMES=jobs.example.com`.
 
-5. HTTPS: положите PEM в **`./nginx/certs`**, в **`.env`** установите **`ENABLE_NGINX_SSL=1`** и при необходимости скорректируйте пути сертификатов (см. `.env.example`).
+5. **HTTPS:** PEM в **`./nginx/certs`**, **`ENABLE_NGINX_SSL=1`**, затем поднимите с пробросом 443, например:
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.ssl-ports.yml up -d
+   ```
+   При занятом **`HTTPS_PORT`** (по умолчанию 8443) задайте в `.env` другой, например `HTTPS_PORT=9443`.
 
 ## Локальная разработка (без полного Compose)
 

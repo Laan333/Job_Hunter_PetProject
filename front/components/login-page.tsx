@@ -147,14 +147,6 @@ export function LoginPage() {
                   </>
                 )}
               </Button>
-
-              <div className="mt-6 p-4 bg-muted rounded-lg">
-                <p className="text-sm text-muted-foreground">
-                  <strong className="text-foreground">Демо-доступ:</strong>
-                  <br />
-                  Используйте ключ: <code className="bg-background px-2 py-0.5 rounded text-primary font-mono">demo-key-12345</code>
-                </p>
-              </div>
             </form>
           </CardContent>
         </Card>

@@ -71,7 +71,7 @@ export async function fetchVacancies(params?: {
   if (params?.favoriteOnly) sp.set('favoriteOnly', 'true')
   if (params?.status) sp.set('status', params.status)
   const q = sp.toString()
-  const r = await apiFetch(`/vacancies${q ? `?${q}` : ''}`)
+  const r = await apiFetch(`/vacancies/${q ? `?${q}` : ''}`)
   return parseJson(r)
 }
 
