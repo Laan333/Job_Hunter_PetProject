@@ -64,6 +64,7 @@ def sync_one_search(db: Session, search: SavedSearch, *, max_pages: int, per_pag
 
     inserted = 0
     skipped = 0
+    fetched_total = 0
     t0 = time.perf_counter()
     src = get_vacancy_source(search.vacancy_source)
     try:
@@ -72,6 +73,7 @@ def sync_one_search(db: Session, search: SavedSearch, *, max_pages: int, per_pag
             items = data.get("items") or []
             if not items:
                 break
+            fetched_total += len(items)
             for item in items:
                 row = _vacancy_insert_row(item, fetch_detail=fetch_detail, vacancy_source=src.id)
                 stmt = pg_insert(Vacancy).values(**row).on_conflict_do_nothing(constraint="uq_vacancy_source_external")
@@ -85,7 +87,8 @@ def sync_one_search(db: Session, search: SavedSearch, *, max_pages: int, per_pag
                 break
         search.last_run_at = datetime.now(timezone.utc)
         search.last_error = None
-        search.vacancies_found = search.vacancies_found + inserted
+        # Keep per-search counter aligned with the latest run size (not cumulative across reruns).
+        search.vacancies_found = fetched_total
         db.add(search)
         db.commit()
     except Exception as e:
@@ -94,9 +97,21 @@ def sync_one_search(db: Session, search: SavedSearch, *, max_pages: int, per_pag
         search.last_run_at = datetime.now(timezone.utc)
         db.add(search)
         db.commit()
-        return {"inserted": inserted, "skipped_duplicates": skipped, "error": str(e), "duration_ms": int((time.perf_counter() - t0) * 1000)}
+        return {
+            "inserted": inserted,
+            "skipped_duplicates": skipped,
+            "fetched_total": fetched_total,
+            "error": str(e),
+            "duration_ms": int((time.perf_counter() - t0) * 1000),
+        }
 
-    return {"inserted": inserted, "skipped_duplicates": skipped, "error": None, "duration_ms": int((time.perf_counter() - t0) * 1000)}
+    return {
+        "inserted": inserted,
+        "skipped_duplicates": skipped,
+        "fetched_total": fetched_total,
+        "error": None,
+        "duration_ms": int((time.perf_counter() - t0) * 1000),
+    }
 
 
 def delete_expired_vacancies(db: Session, max_age_days: int) -> int:
