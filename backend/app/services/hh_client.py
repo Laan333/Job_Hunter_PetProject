@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -14,15 +15,43 @@ logger = logging.getLogger(__name__)
 _DEFAULT_HH_UA = "hh-vacancy-searcher/1.0 (contact: you@example.com)"
 
 
+def _extract_user_agent(raw: str) -> str:
+    """Extract User-Agent from plain string or JSON-like env value."""
+
+    value = raw.strip()
+    if not value:
+        return ""
+    if value.startswith("{") and value.endswith("}"):
+        try:
+            data = json.loads(value)
+            if isinstance(data, dict):
+                ua = data.get("User-Agent") or data.get("user-agent") or data.get("user_agent")
+                return str(ua).strip() if ua else ""
+        except Exception:
+            logger.exception("Failed to parse HH_USER_AGENT as JSON object")
+            return ""
+    return value
+
+
+def _normalize_hh_ua(raw: str) -> str:
+    """Normalize HH UA and avoid known blacklisted demo identifiers."""
+
+    ua = _extract_user_agent(raw)
+    if not ua:
+        ua = _DEFAULT_HH_UA
+    low = ua.lower()
+    if "hh-vacancy-searcher/1.0" in low or "find-work-dashboard/1.0" in low:
+        ua = "find-work-bot/1.0 (contact: you@example.com)"
+    return ua
+
+
 def _hh_headers() -> dict[str, str]:
     """Build headers for hh.ru API.
 
     HH may respond with 400 on missing/empty User-Agent, so we always provide a non-empty value.
     """
 
-    ua = (get_settings().hh_user_agent or "").strip()
-    if not ua:
-        ua = _DEFAULT_HH_UA
+    ua = _normalize_hh_ua(get_settings().hh_user_agent or "")
     return {"User-Agent": ua, "Accept": "application/json"}
 
 
