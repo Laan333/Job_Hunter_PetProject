@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Header } from '@/components/dashboard/header'
 import { VacancyCard } from '@/components/dashboard/vacancy-card'
@@ -22,6 +23,7 @@ import { Search, Filter, SortAsc, Star, Brain, Grid3X3, List } from 'lucide-reac
 import { cn } from '@/lib/utils'
 
 export default function VacanciesPage() {
+  const searchParams = useSearchParams()
   const [vacancies, setVacancies] = useState<Vacancy[]>([])
   const [searches, setSearches] = useState<SearchQuery[]>([])
   const [selectedSearchId, setSelectedSearchId] = useState<string>('all')
@@ -37,6 +39,7 @@ export default function VacanciesPage() {
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [llmCooldownSeconds, setLlmCooldownSeconds] = useState(0)
+  const [openedFromLink, setOpenedFromLink] = useState(false)
   const loadMoreRef = useRef<HTMLDivElement | null>(null)
   const PAGE_SIZE = 40
 
@@ -119,6 +122,24 @@ export default function VacanciesPage() {
     observer.observe(node)
     return () => observer.disconnect()
   }, [loadVacancies, loading, loadingMore, page, total, vacancies.length])
+
+  useEffect(() => {
+    const vacancyId = searchParams.get('vacancyId')
+    if (!vacancyId || openedFromLink) return
+    setOpenedFromLink(true)
+    void (async () => {
+      try {
+        const full = await fetchVacancy(vacancyId)
+        setSelectedVacancy(full)
+        setVacancies((prev) => {
+          const exists = prev.some((v) => v.id === full.id)
+          return exists ? prev.map((v) => (v.id === full.id ? { ...v, ...full } : v)) : [full, ...prev]
+        })
+      } catch {
+        toast.error('Не удалось открыть вакансию по ссылке')
+      }
+    })()
+  }, [openedFromLink, searchParams])
 
   const filteredVacancies = vacancies
     .filter((v) => {

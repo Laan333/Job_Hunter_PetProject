@@ -165,10 +165,13 @@ def run_scheduled_matching(db: Session) -> dict[str, int]:
                 notifications += 1
                 if tg_on:
                     link_base = (s.public_url or "").rstrip("/")
-                    vacancy_link = (v.url or "").strip() or f"{link_base}/dashboard/vacancies"
+                    hh_link = (v.url or "").strip() or "-"
+                    panel_link = f"{link_base}/dashboard/vacancies?vacancyId={v.id}"
                     msg = (
                         f"Матч {parsed.score}/100: {v.title}\n{v.company}\n"
-                        f"{parsed.summary_for_notification}\n{vacancy_link}"
+                        f"{parsed.summary_for_notification}\n"
+                        f"HH: {hh_link}\n"
+                        f"В панели: {panel_link}"
                     )
                     send_res = send_message(msg)
                     if send_res["ok"] and send_res["message_id"]:
