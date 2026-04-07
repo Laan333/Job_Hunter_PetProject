@@ -15,7 +15,6 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: 'JobHunter Pro - Агрегатор вакансий',
   description: 'Профессиональный инструмент для поиска и анализа вакансий с HH.ru',
-  generator: 'v0.app',
   icons: {
     icon: [
       {
