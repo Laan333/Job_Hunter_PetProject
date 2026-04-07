@@ -30,7 +30,7 @@ from app.models import (
 from app.serializers import notification_to_dict, resume_to_dict, search_to_dict, sync_run_to_dict
 from app.services.llm_service import get_llm_status
 from app.services.matching_job import match_job_status, run_scheduled_matching
-from app.services.sync_service import run_full_sync
+from app.services.sync_service import run_full_sync, sync_one_search
 from app.settings_service import ensure_defaults, get_bool, get_int, get_str, get_value, set_value
 from app.sources import VacancySourceRegistry
 
@@ -213,6 +213,41 @@ def patch_search(
     db.commit()
     db.refresh(s)
     return search_to_dict(s)
+
+
+@router.post("/searches/{search_id}/sync")
+def run_saved_search_sync(
+    search_id: UUID,
+    db: Session = Depends(get_db),
+    _t: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """Fetch vacancies for one saved search immediately (inactive OK; scheduled sync still skips paused)."""
+
+    s_row = db.get(SavedSearch, search_id)
+    if s_row is None:
+        raise HTTPException(status_code=404, detail="Search not found")
+
+    ensure_defaults(db)
+    settings = get_settings()
+    max_per_search = get_int(db, "max_vacancies_per_search", 200)
+    per_page = min(100, max_per_search)
+    max_pages = max(1, (max_per_search + per_page - 1) // per_page)
+
+    stats = sync_one_search(
+        db,
+        s_row,
+        max_pages=max_pages,
+        per_page=per_page,
+        fetch_detail=settings.hh_fetch_detail,
+    )
+    db.refresh(s_row)
+    return {
+        "inserted": stats["inserted"],
+        "skippedDuplicates": stats["skipped_duplicates"],
+        "durationMs": stats["duration_ms"],
+        "error": stats.get("error"),
+        "search": search_to_dict(s_row),
+    }
 
 
 @router.delete("/searches/{search_id}")

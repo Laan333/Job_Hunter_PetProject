@@ -121,6 +121,19 @@ export async function patchSearch(id: string, body: Record<string, unknown>): Pr
   return parseJson(r)
 }
 
+export type SearchSyncResponse = {
+  inserted: number
+  skippedDuplicates: number
+  durationMs: number
+  error?: string | null
+  search: SearchQuery
+}
+
+export async function postSearchSync(searchId: string): Promise<SearchSyncResponse> {
+  const r = await apiFetch(`/searches/${searchId}/sync`, { method: 'POST' })
+  return parseJson(r)
+}
+
 export async function deleteSearch(id: string): Promise<void> {
   const r = await apiFetch(`/searches/${id}`, { method: 'DELETE' })
   if (!r.ok) await parseJson(r)

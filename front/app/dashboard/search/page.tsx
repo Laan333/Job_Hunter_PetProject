@@ -23,7 +23,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { createSearch, deleteSearch, fetchSearches, patchSearch } from '@/lib/api'
+import { ApiError, createSearch, deleteSearch, fetchSearches, patchSearch, postSearchSync } from '@/lib/api'
 import type { SearchQuery } from '@/lib/types'
 import { 
   Search, 
@@ -41,6 +41,7 @@ import { cn } from '@/lib/utils'
 
 export default function SearchQueriesPage() {
   const [queries, setQueries] = useState<SearchQuery[]>([])
+  const [syncingId, setSyncingId] = useState<string | null>(null)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [newQuery, setNewQuery] = useState({
     keyword: '',
@@ -77,6 +78,35 @@ export default function SearchQueriesPage() {
       setQueries((prev) => prev.filter((q) => q.id !== id))
     } catch {
       toast.error('Не удалось удалить запрос')
+    }
+  }
+
+  const handleRunSyncNow = async (id: string) => {
+    setSyncingId(id)
+    try {
+      const res = await postSearchSync(id)
+      setQueries((prev) => prev.map((q) => (q.id === id ? res.search : q)))
+      if (res.error) {
+        toast.error(`Синк: ${res.error}`)
+        return
+      }
+      if (res.inserted > 0) {
+        toast.success(`Добавлено новых вакансий: ${res.inserted}`)
+      } else {
+        toast.success('Готово: новых вакансий не найдено (возможно, уже были в базе)')
+      }
+    } catch (e) {
+      if (e instanceof ApiError) {
+        const detail =
+          e.body && typeof e.body === 'object' && e.body !== null && 'detail' in e.body
+            ? String((e.body as { detail?: unknown }).detail)
+            : e.message
+        toast.error(detail || `Ошибка ${e.status}`)
+      } else {
+        toast.error('Не удалось запустить синхронизацию')
+      }
+    } finally {
+      setSyncingId(null)
     }
   }
 
@@ -325,10 +355,11 @@ export default function SearchQueriesPage() {
                     variant="outline" 
                     size="sm" 
                     className="flex-1 gap-2"
-                    disabled={!query.isActive}
+                    disabled={syncingId === query.id}
+                    onClick={() => void handleRunSyncNow(query.id)}
                   >
-                    <RefreshCw className="w-4 h-4" />
-                    Запустить сейчас
+                    <RefreshCw className={cn('w-4 h-4', syncingId === query.id && 'animate-spin')} />
+                    {syncingId === query.id ? 'Синхронизация…' : 'Запустить сейчас'}
                   </Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8">
                     <Edit className="w-4 h-4" />
