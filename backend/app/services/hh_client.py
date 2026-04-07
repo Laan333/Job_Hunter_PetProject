@@ -12,7 +12,7 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_HH_UA = "hh-vacancy-searcher/1.0 (contact: you@example.com)"
+_DEFAULT_HH_UA = "hh-vacancy-searcher/1.0"
 
 
 def _extract_user_agent(raw: str) -> str:
@@ -34,14 +34,11 @@ def _extract_user_agent(raw: str) -> str:
 
 
 def _normalize_hh_ua(raw: str) -> str:
-    """Normalize HH UA and avoid known blacklisted demo identifiers."""
+    """Normalize HH UA preserving `main.py` behavior."""
 
     ua = _extract_user_agent(raw)
     if not ua:
         ua = _DEFAULT_HH_UA
-    low = ua.lower()
-    if "hh-vacancy-searcher/1.0" in low or "find-work-dashboard/1.0" in low:
-        ua = "find-work-bot/1.0 (contact: you@example.com)"
     return ua
 
 
@@ -112,7 +109,13 @@ def fetch_vacancies_page(
             resp.raise_for_status()
         except httpx.HTTPStatusError:
             # HH often returns a helpful JSON body for 400s; include it in logs for debugging.
-            logger.error("HH /vacancies error %s for %s; body=%s", resp.status_code, resp.request.url, resp.text)
+            logger.error(
+                "HH /vacancies error %s for %s; ua=%s; body=%s",
+                resp.status_code,
+                resp.request.url,
+                headers.get("User-Agent"),
+                resp.text,
+            )
             raise
         return resp.json()
 
