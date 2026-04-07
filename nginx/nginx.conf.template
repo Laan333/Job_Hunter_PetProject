@@ -1,6 +1,6 @@
 server {
-    listen 80;
-    server_name ${PUBLIC_DOMAIN};
+    listen ${NGINX_LISTEN_PORT} default_server;
+    server_name ${NGINX_SERVER_NAMES};
 
     location /api/ {
         proxy_pass http://api:8000/api/;

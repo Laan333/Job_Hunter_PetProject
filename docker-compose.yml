@@ -89,10 +89,13 @@ services:
       context: ./nginx
       dockerfile: Dockerfile
     ports:
-      - "${HTTP_PORT:-8080}:80"
-      - "${HTTPS_PORT:-8443}:443"
+      # NGINX_BIND=0.0.0.0 — слушать на всех интерфейсах (доступ из интернета, если порт открыт в фаерволе)
+      - "${NGINX_BIND:-0.0.0.0}:${HTTP_PORT:-8080}:80"
+      - "${NGINX_BIND:-0.0.0.0}:${HTTPS_PORT:-8443}:443"
     environment:
-      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:-localhost}
+      NGINX_SERVER_NAMES: ${NGINX_SERVER_NAMES:-_}
+      NGINX_LISTEN_PORT: ${NGINX_LISTEN_PORT:-80}
+      NGINX_SSL_LISTEN_PORT: ${NGINX_SSL_LISTEN_PORT:-443}
       ENABLE_NGINX_SSL: ${ENABLE_NGINX_SSL:-0}
       SSL_CERTIFICATE_PATH: ${SSL_CERTIFICATE_PATH:-/etc/nginx/certs/fullchain.pem}
       SSL_CERTIFICATE_KEY_PATH: ${SSL_CERTIFICATE_KEY_PATH:-/etc/nginx/certs/privkey.pem}

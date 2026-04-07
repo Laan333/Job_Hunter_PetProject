@@ -1,0 +1,21 @@
+Metadata-Version: 2.4
+Name: find-work-api
+Version: 0.1.0
+Summary: Job Hunt Dashboard API
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.115.0
+Requires-Dist: uvicorn[standard]>=0.32.0
+Requires-Dist: sqlalchemy>=2.0.36
+Requires-Dist: psycopg[binary]>=3.2.0
+Requires-Dist: alembic>=1.14.0
+Requires-Dist: httpx>=0.28.0
+Requires-Dist: pydantic>=2.10.0
+Requires-Dist: pydantic-settings>=2.6.0
+Requires-Dist: apscheduler>=3.10.4
+Requires-Dist: orjson>=3.10.0
+Requires-Dist: json-repair>=0.30.0
+
+# find_work API
+
+FastAPI backend for the Job Hunt dashboard. Run via Docker Compose or `uvicorn app.main:app`.
