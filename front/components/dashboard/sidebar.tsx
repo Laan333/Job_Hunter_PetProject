@@ -16,7 +16,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Bell,
-  Trophy
+  Trophy,
+  Activity
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -27,6 +28,7 @@ const navigation = [
   { name: 'Моё резюме', href: '/dashboard/resume', icon: FileText },
   { name: 'Аналитика', href: '/dashboard/analytics', icon: BarChart3 },
   { name: 'Матч-баллы', href: '/dashboard/match-scores', icon: Trophy },
+  { name: 'Процессы и логи', href: '/dashboard/processes', icon: Activity },
   { name: 'Уведомления', href: '/dashboard/notifications', icon: Bell },
   { name: 'Настройки', href: '/dashboard/settings', icon: Settings },
 ]

@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { ApiError, fetchLlmStatus, fetchSearches, fetchVacancies, patchVacancy, postAnalyze } from '@/lib/api'
+import { ApiError, fetchLlmStatus, fetchSearches, fetchVacancies, fetchVacancy, patchVacancy, postAnalyze } from '@/lib/api'
 import type { SearchQuery, Vacancy } from '@/lib/types'
 import { Search, Filter, SortAsc, Star, Brain, Grid3X3, List } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -195,6 +195,17 @@ export default function VacanciesPage() {
     )
   }
 
+  const handleViewDetails = async (vacancy: Vacancy) => {
+    setSelectedVacancy(vacancy)
+    try {
+      const full = await fetchVacancy(vacancy.id)
+      setSelectedVacancy(full)
+      setVacancies((prev) => prev.map((v) => (v.id === vacancy.id ? { ...v, ...full } : v)))
+    } catch {
+      // Keep fallback with list payload if detail fetch fails.
+    }
+  }
+
   const statusOptions = [
     { value: 'all', label: 'Все статусы' },
     { value: 'new', label: 'Новые' },
@@ -316,7 +327,7 @@ export default function VacanciesPage() {
               key={vacancy.id}
               vacancy={vacancy}
               llmCooldownSeconds={llmCooldownSeconds}
-              onViewDetails={setSelectedVacancy}
+              onViewDetails={(v) => void handleViewDetails(v)}
               onGenerateCoverLetter={setCoverLetterVacancy}
               onToggleFavorite={handleToggleFavorite}
               onAnalyze={handleAnalyze}

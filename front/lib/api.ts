@@ -88,6 +88,11 @@ export async function patchVacancy(
   return parseJson(r)
 }
 
+export async function fetchVacancy(id: string): Promise<Vacancy> {
+  const r = await apiFetch(`/vacancies/${id}`)
+  return parseJson(r)
+}
+
 export async function postCoverLetter(vacancyId: string, resumeId?: string): Promise<{ coverLetter: string }> {
   const r = await apiFetch(`/vacancies/${vacancyId}/cover-letter`, {
     method: 'POST',
@@ -164,6 +169,42 @@ export type LlmStatusDto = {
 
 export async function fetchLlmStatus(): Promise<LlmStatusDto> {
   const r = await apiFetch('/llm/status')
+  return parseJson(r)
+}
+
+export type ProcessStatusDto = {
+  active: boolean
+  processType?: 'sync' | 'ai_match'
+  runId?: string
+  phase?: string
+  message?: string
+  progress?: number
+  updatedAt?: string
+  counters?: Record<string, number>
+}
+
+export type ProcessLogEventDto = {
+  id: string
+  ts: string
+  processType: 'sync' | 'ai_match'
+  runId: string
+  phase: string
+  status: 'running' | 'completed' | 'failed'
+  message: string
+  progress?: number
+  counters?: Record<string, number>
+  details?: Record<string, unknown>
+}
+
+export async function fetchProcessStatus(): Promise<ProcessStatusDto> {
+  const r = await apiFetch('/process/status')
+  return parseJson(r)
+}
+
+export async function fetchProcessLogs(limit = 100): Promise<ProcessLogEventDto[]> {
+  const sp = new URLSearchParams()
+  sp.set('limit', String(limit))
+  const r = await apiFetch(`/process/logs?${sp.toString()}`)
   return parseJson(r)
 }
 

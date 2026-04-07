@@ -12,6 +12,7 @@ from app.config import get_settings
 from app.models import AnalysisSource, Notification, Resume, Vacancy, VacancyAnalysis
 from app.services import llm_service
 from app.services.llm_service import try_acquire_llm_slot
+from app.services.process_events import clear_active, emit_event, set_active
 from app.services.telegram_service import send_message
 from app.settings_service import ensure_defaults, get_bool, get_int, get_value, set_value
 
@@ -39,9 +40,38 @@ def run_scheduled_matching(db: Session) -> dict[str, int]:
 
     ensure_defaults(db)
     s = get_settings()
+    run_id = str(uuid.uuid4())
+    set_active(
+        db,
+        process_type="ai_match",
+        run_id=run_id,
+        phase="start",
+        message="AI-анализ запущен",
+        progress=1,
+        counters={"analyzed": 0, "notifications": 0},
+    )
+    emit_event(
+        db,
+        process_type="ai_match",
+        run_id=run_id,
+        phase="start",
+        status="running",
+        message="Запущен пакетный AI-анализ вакансий",
+        progress=1,
+    )
     active = db.query(Resume).filter(Resume.is_active.is_(True)).order_by(Resume.updated_at.desc()).first()
     if active is None:
         logger.info("Scheduled match: no active resume")
+        emit_event(
+            db,
+            process_type="ai_match",
+            run_id=run_id,
+            phase="skipped",
+            status="completed",
+            message="AI-анализ пропущен: нет активного резюме",
+            progress=100,
+        )
+        clear_active(db)
         return {"analyzed": 0, "notifications": 0}
 
     threshold = get_int(db, "high_match_threshold", s.default_high_match_threshold)
@@ -66,10 +96,21 @@ def run_scheduled_matching(db: Session) -> dict[str, int]:
 
     analyzed = 0
     notifications = 0
-    for v in candidates:
+    total = len(candidates)
+    for idx, v in enumerate(candidates, start=1):
         allowed, wait = try_acquire_llm_slot(db)
         if not allowed:
             logger.info("Scheduled match: LLM rate limit, stop batch (retry in %ss)", wait)
+            emit_event(
+                db,
+                process_type="ai_match",
+                run_id=run_id,
+                phase="rate_limited",
+                status="running",
+                message=f"AI rate limit: пауза, повтор через {wait}с",
+                progress=int((idx / max(1, total)) * 100),
+                counters={"analyzed": analyzed, "notifications": notifications},
+            )
             break
         try:
             desc = v.description_md or ""
@@ -154,11 +195,53 @@ def run_scheduled_matching(db: Session) -> dict[str, int]:
                         )
             db.commit()
             analyzed += 1
+            progress = int((idx / max(1, total)) * 100)
+            counters = {"analyzed": analyzed, "notifications": notifications, "totalCandidates": total}
+            set_active(
+                db,
+                process_type="ai_match",
+                run_id=run_id,
+                phase="analyzing",
+                message=f"Проанализировано {analyzed}/{total}",
+                progress=progress,
+                counters=counters,
+            )
+            emit_event(
+                db,
+                process_type="ai_match",
+                run_id=run_id,
+                phase="analyzing",
+                status="running",
+                message=f"{v.title}: score {parsed.score}/100",
+                progress=progress,
+                counters=counters,
+                details={"vacancyId": str(v.id), "score": parsed.score},
+            )
         except Exception:
             logger.exception("Scheduled match failed for vacancy %s", v.id)
             db.rollback()
+            emit_event(
+                db,
+                process_type="ai_match",
+                run_id=run_id,
+                phase="error",
+                status="running",
+                message=f"Ошибка анализа вакансии {v.title}",
+                details={"vacancyId": str(v.id)},
+            )
 
     set_value(db, "last_match_job_at", datetime.now(timezone.utc).isoformat())
+    emit_event(
+        db,
+        process_type="ai_match",
+        run_id=run_id,
+        phase="completed",
+        status="completed",
+        message=f"AI-анализ завершен: {analyzed} обработано, уведомлений {notifications}",
+        progress=100,
+        counters={"analyzed": analyzed, "notifications": notifications, "totalCandidates": total},
+    )
+    clear_active(db)
     return {"analyzed": analyzed, "notifications": notifications}
 
 

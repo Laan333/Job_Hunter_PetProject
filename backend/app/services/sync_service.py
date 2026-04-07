@@ -18,7 +18,9 @@ from app.config import get_settings
 from app.models import SavedSearch, SyncRun, SyncRunItem, SyncTrigger, Vacancy, VacancyStatus
 from app.services import hh_client
 from app.services.hh_mapper import enrich_from_detail, map_list_item_to_row
-from app.settings_service import ensure_defaults, get_int
+from app.services.process_events import clear_active, emit_event, set_active
+from app.services.telegram_service import send_message
+from app.settings_service import ensure_defaults, get_bool, get_int
 from app.sources import get_vacancy_source
 
 logger = logging.getLogger(__name__)
@@ -129,6 +131,18 @@ def run_full_sync(db: Session, *, trigger: SyncTrigger) -> SyncRun:
     db.add(run)
     db.commit()
     db.refresh(run)
+    run_id = str(run.id)
+    set_active(db, process_type="sync", run_id=run_id, phase="start", message="Синхронизация запущена", progress=1)
+    emit_event(
+        db,
+        process_type="sync",
+        run_id=run_id,
+        phase="start",
+        status="running",
+        message="Запущен парсинг вакансий",
+        progress=1,
+        counters={"inserted": 0, "skipped": 0, "errors": 0},
+    )
 
     try:
         removed = delete_expired_vacancies(db, max_age)
@@ -136,11 +150,52 @@ def run_full_sync(db: Session, *, trigger: SyncTrigger) -> SyncRun:
 
         searches = db.query(SavedSearch).filter(SavedSearch.is_active.is_(True)).all()
         sync_errors: list[str] = []
-        for search in searches:
+        inserted_total = 0
+        skipped_total = 0
+        tg_progress_on = get_bool(db, "telegram_enabled", False)
+        if tg_progress_on:
+            send_message(f"Парсинг вакансий запущен. Поисковых запросов: {len(searches)}")
+        for idx, search in enumerate(searches, start=1):
             stats = sync_one_search(db, search, max_pages=max_pages, per_page=per_page, fetch_detail=fetch_detail)
             err = stats.get("error")
             if err:
                 sync_errors.append(f"{search.keyword!r}: {err}")
+            inserted_total += int(stats["inserted"])
+            skipped_total += int(stats["skipped_duplicates"])
+            progress = int((idx / max(1, len(searches))) * 100)
+            counters = {
+                "inserted": inserted_total,
+                "skipped": skipped_total,
+                "errors": len(sync_errors),
+                "processedSearches": idx,
+                "totalSearches": len(searches),
+            }
+            set_active(
+                db,
+                process_type="sync",
+                run_id=run_id,
+                phase="search_sync",
+                message=f"Обработан запрос: {search.keyword}",
+                progress=progress,
+                counters=counters,
+            )
+            emit_event(
+                db,
+                process_type="sync",
+                run_id=run_id,
+                phase="search_sync",
+                status="running",
+                message=f"{search.keyword}: +{stats['inserted']} новых, {stats['skipped_duplicates']} дубликатов",
+                progress=progress,
+                counters=counters,
+                details={"searchId": str(search.id), "searchKeyword": search.keyword, "error": err},
+            )
+            if tg_progress_on:
+                send_message(
+                    f"Парсинг прогресс: {idx}/{len(searches)}\n"
+                    f"{search.keyword}\n"
+                    f"Новых: {stats['inserted']}, дубликатов: {stats['skipped_duplicates']}"
+                )
             item = SyncRunItem(
                 id=uuid.uuid4(),
                 sync_run_id=run.id,
@@ -156,6 +211,43 @@ def run_full_sync(db: Session, *, trigger: SyncTrigger) -> SyncRun:
         run.finished_at = datetime.now(timezone.utc)
         db.add(run)
         db.commit()
+        final_message = (
+            f"Парсинг завершен: новых {inserted_total}, дубликатов {skipped_total}, ошибок {len(sync_errors)}"
+        )
+        set_active(
+            db,
+            process_type="sync",
+            run_id=run_id,
+            phase="completed",
+            message=final_message,
+            progress=100,
+            counters={
+                "inserted": inserted_total,
+                "skipped": skipped_total,
+                "errors": len(sync_errors),
+                "processedSearches": len(searches),
+                "totalSearches": len(searches),
+            },
+        )
+        emit_event(
+            db,
+            process_type="sync",
+            run_id=run_id,
+            phase="completed",
+            status="completed",
+            message=final_message,
+            progress=100,
+            counters={
+                "inserted": inserted_total,
+                "skipped": skipped_total,
+                "errors": len(sync_errors),
+                "processedSearches": len(searches),
+                "totalSearches": len(searches),
+            },
+        )
+        if tg_progress_on:
+            send_message(final_message)
+        clear_active(db)
         if sync_errors:
             _post_alert_webhook("Vacancy sync completed with errors:\n" + "\n".join(sync_errors[:8]))
     except Exception as e:
@@ -164,6 +256,17 @@ def run_full_sync(db: Session, *, trigger: SyncTrigger) -> SyncRun:
         run.error = str(e)
         db.add(run)
         db.commit()
+        emit_event(
+            db,
+            process_type="sync",
+            run_id=run_id,
+            phase="failed",
+            status="failed",
+            message=f"Парсинг завершился ошибкой: {e}",
+            progress=100,
+            details={"error": str(e)},
+        )
+        clear_active(db)
         _post_alert_webhook(f"Full vacancy sync failed: {e}")
 
     return run

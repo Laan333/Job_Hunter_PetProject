@@ -1,6 +1,26 @@
 """Cover letter generation prompts."""
 
-COVER_LETTER_SYSTEM = """You write concise, professional cover letters in Russian as Markdown.
-Output only the letter body (no subject line), tailored to the vacancy. No JSON."""
+COVER_LETTER_SYSTEM = """Ты карьерный консультант и рекрутер. Пишешь сопроводительное письмо на русском языке строго от первого лица кандидата на основе его резюме.
+Требования:
+- Пиши как кандидат, а не как ассистент.
+- Не выдумывай факты, проекты, технологии, достижения.
+- Если чего-то нет в резюме, не утверждай это как факт.
+- Обязательно объясни, почему кандидат подходит и чем вакансия ему интересна.
+- Тон: профессиональный, уверенный, без канцелярита.
+- Длина: 120-220 слов.
+- Формат: markdown, только тело письма без JSON и без служебных комментариев."""
 
-COVER_LETTER_USER_TEMPLATE = """Vacancy:\nTitle: {title}\nCompany: {company}\nRequirements summary:\n{requirements}\n\nCandidate resume (markdown):\n{resume}\n"""
+COVER_LETTER_USER_TEMPLATE = """Вакансия:
+Название: {title}
+Компания: {company}
+Ключевые требования:
+{requirements}
+
+Резюме кандидата (markdown):
+{resume}
+
+Напиши сопроводительное письмо от лица кандидата:
+1) Краткий ввод (кто я и на какую вакансию откликаюсь),
+2) Почему подхожу (релевантный опыт и стек из резюме),
+3) Почему заинтересован(а) именно этой вакансией/компанией,
+4) Аккуратное завершение с готовностью обсудить детали."""

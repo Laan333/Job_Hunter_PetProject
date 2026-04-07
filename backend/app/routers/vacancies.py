@@ -17,6 +17,8 @@ from app.database import get_db
 from app.deps import verify_api_key
 from app.models import AnalysisSource, CoverLetter, Resume, Vacancy, VacancyAnalysis, VacancyStatus
 from app.serializers import analysis_to_dict, vacancy_to_dict
+from app.services import hh_client
+from app.services.hh_mapper import enrich_from_detail
 from app.services import llm_service
 from app.services.llm_service import assert_llm_slot
 
@@ -131,6 +133,44 @@ def get_vacancy(
     v = db.get(Vacancy, vacancy_id)
     if v is None:
         raise HTTPException(status_code=404, detail="Vacancy not found")
+    need_full = (
+        v.source == "hh"
+        and (
+            not (v.description_md or "").strip()
+            or len((v.description_md or "").strip()) < 700
+            or not (v.requirements_md or "").strip()
+            or not (v.responsibilities_md or "").strip()
+        )
+    )
+    if need_full:
+        try:
+            detail = hh_client.fetch_vacancy_detail(v.external_id)
+            enriched = enrich_from_detail(
+                {
+                    "raw_payload": dict(v.raw_payload or {}),
+                    "description_md": v.description_md,
+                    "requirements_md": v.requirements_md,
+                    "responsibilities_md": v.responsibilities_md,
+                    "skills": list(v.skills or []),
+                    "experience": v.experience,
+                    "employment": v.employment,
+                    "schedule": v.schedule,
+                },
+                detail,
+            )
+            v.raw_payload = enriched.get("raw_payload", v.raw_payload)
+            v.description_md = enriched.get("description_md", v.description_md)
+            v.requirements_md = enriched.get("requirements_md", v.requirements_md)
+            v.responsibilities_md = enriched.get("responsibilities_md", v.responsibilities_md)
+            v.skills = enriched.get("skills", v.skills)
+            v.experience = enriched.get("experience", v.experience)
+            v.employment = enriched.get("employment", v.employment)
+            v.schedule = enriched.get("schedule", v.schedule)
+            db.add(v)
+            db.commit()
+            db.refresh(v)
+        except Exception:
+            logger.exception("Failed to enrich full vacancy detail for %s", v.id)
     return vacancy_to_dict(v)
 
 

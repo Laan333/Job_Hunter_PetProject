@@ -31,6 +31,7 @@ from app.models import (
 from app.serializers import notification_to_dict, resume_to_dict, search_to_dict, sync_run_to_dict
 from app.services.llm_service import get_llm_status
 from app.services.matching_job import match_job_status, run_scheduled_matching
+from app.services.process_events import get_process_logs, get_process_status
 from app.services.sync_service import run_full_sync, sync_one_search
 from app.settings_service import ensure_defaults, get_bool, get_int, get_str, get_value, set_value
 from app.sources import VacancySourceRegistry
@@ -312,6 +313,9 @@ def run_saved_search_sync(
         per_page=per_page,
         fetch_detail=settings.hh_fetch_detail,
     )
+    auto_match_stats: dict[str, int] | None = None
+    if get_bool(db, "auto_analyze", False):
+        auto_match_stats = run_scheduled_matching(db)
     db.refresh(s_row)
     return {
         "inserted": stats["inserted"],
@@ -319,6 +323,7 @@ def run_saved_search_sync(
         "durationMs": stats["duration_ms"],
         "error": stats.get("error"),
         "search": search_to_dict(s_row),
+        "autoAnalyze": auto_match_stats,
     }
 
 
@@ -718,3 +723,21 @@ def match_run_once(db: Session = Depends(get_db), _t: str = Depends(verify_api_k
 
     stats = run_scheduled_matching(db)
     return stats
+
+
+@router.get("/process/status")
+def process_status(db: Session = Depends(get_db), _t: str = Depends(verify_api_key)) -> dict[str, Any]:
+    """Current active long-running process status for header polling."""
+
+    return get_process_status(db)
+
+
+@router.get("/process/logs")
+def process_logs(
+    db: Session = Depends(get_db),
+    _t: str = Depends(verify_api_key),
+    limit: int = Query(default=100, ge=1, le=300),
+) -> list[dict[str, Any]]:
+    """Recent process events timeline (sync + ai_match)."""
+
+    return get_process_logs(db, limit=limit)

@@ -43,6 +43,8 @@ export default function SearchQueriesPage() {
   const [queries, setQueries] = useState<SearchQuery[]>([])
   const [syncingId, setSyncingId] = useState<string | null>(null)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const ANY = '__any__'
   const [newQuery, setNewQuery] = useState({
     keyword: '',
@@ -50,6 +52,13 @@ export default function SearchQueriesPage() {
     experience: '',
     employment: '',
     interval: 60
+  })
+  const [editQuery, setEditQuery] = useState({
+    keyword: '',
+    location: '',
+    experience: '',
+    employment: '',
+    interval: 60,
   })
 
   useEffect(() => {
@@ -136,6 +145,40 @@ export default function SearchQueriesPage() {
       })
     } catch {
       toast.error('Не удалось создать запрос')
+    }
+  }
+
+  const handleStartEdit = (query: SearchQuery) => {
+    setEditingId(query.id)
+    setEditQuery({
+      keyword: query.keyword,
+      location: query.location || '',
+      experience: query.experience || '',
+      employment: query.employment || '',
+      interval: query.interval,
+    })
+    setIsEditDialogOpen(true)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingId) return
+    if (!editQuery.keyword.trim()) {
+      toast.error('Укажите ключевые слова')
+      return
+    }
+    try {
+      const updated = await patchSearch(editingId, {
+        keyword: editQuery.keyword.trim(),
+        location: editQuery.location || null,
+        experience: editQuery.experience || null,
+        employment: editQuery.employment || null,
+        interval: editQuery.interval,
+      })
+      setQueries((prev) => prev.map((q) => (q.id === editingId ? updated : q)))
+      setIsEditDialogOpen(false)
+      setEditingId(null)
+    } catch {
+      toast.error('Не удалось сохранить изменения')
     }
   }
 
@@ -366,7 +409,12 @@ export default function SearchQueriesPage() {
                     <RefreshCw className={cn('w-4 h-4', syncingId === query.id && 'animate-spin')} />
                     {syncingId === query.id ? 'Синхронизация…' : 'Запустить сейчас'}
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => handleStartEdit(query)}
+                  >
                     <Edit className="w-4 h-4" />
                   </Button>
                   <Button 
@@ -396,6 +444,102 @@ export default function SearchQueriesPage() {
             </Button>
           </div>
         )}
+
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Редактировать запрос</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-keyword">Ключевые слова *</Label>
+                <Input
+                  id="edit-keyword"
+                  placeholder="Frontend Developer React"
+                  value={editQuery.keyword}
+                  onChange={(e) => setEditQuery((prev) => ({ ...prev, keyword: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-location">Город</Label>
+                <Input
+                  id="edit-location"
+                  placeholder="Москва"
+                  value={editQuery.location}
+                  onChange={(e) => setEditQuery((prev) => ({ ...prev, location: e.target.value }))}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Опыт работы</Label>
+                  <Select
+                    value={editQuery.experience || ANY}
+                    onValueChange={(value) =>
+                      setEditQuery((prev) => ({ ...prev, experience: value === ANY ? '' : value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Выберите" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {experienceOptions.map((opt) => (
+                        <SelectItem key={`edit-exp-${opt.value || ANY}`} value={opt.value || ANY}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Занятость</Label>
+                  <Select
+                    value={editQuery.employment || ANY}
+                    onValueChange={(value) =>
+                      setEditQuery((prev) => ({ ...prev, employment: value === ANY ? '' : value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Выберите" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {employmentOptions.map((opt) => (
+                        <SelectItem key={`edit-emp-${opt.value || ANY}`} value={opt.value || ANY}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Интервал обновления</Label>
+                <Select
+                  value={editQuery.interval.toString()}
+                  onValueChange={(value) => setEditQuery((prev) => ({ ...prev, interval: parseInt(value) }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {intervalOptions.map((opt) => (
+                      <SelectItem key={`edit-int-${opt.value}`} value={opt.value.toString()}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button onClick={handleSaveEdit} className="w-full" disabled={!editQuery.keyword.trim()}>
+                Сохранить изменения
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )

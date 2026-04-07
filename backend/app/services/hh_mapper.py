@@ -15,6 +15,27 @@ def _strip_highlight(html: str | None) -> str:
     return text.strip()
 
 
+def _extract_sections_from_description(description_md: str) -> tuple[str | None, str | None]:
+    """Try to split full description into requirements/responsibilities sections."""
+
+    if not description_md:
+        return None, None
+    text = description_md
+    req_match = re.search(
+        r"(требовани[яе]|мы ожидаем|что ожидаем|что нужно|необходимо)(.*?)(?=(обязанност|задач|услови|что мы предлагаем|$))",
+        text,
+        flags=re.I | re.S,
+    )
+    resp_match = re.search(
+        r"(обязанност[ьи]|задач[аи]|чем предстоит заниматься|что делать)(.*?)(?=(услови|что мы предлагаем|требовани|$))",
+        text,
+        flags=re.I | re.S,
+    )
+    req = req_match.group(2).strip() if req_match else None
+    resp = resp_match.group(2).strip() if resp_match else None
+    return (req or None, resp or None)
+
+
 def _parse_published_at(raw: str | None) -> datetime | None:
     if not raw:
         return None
@@ -87,6 +108,7 @@ def enrich_from_detail(base: dict[str, Any], detail: dict[str, Any]) -> dict[str
     branded = detail.get("branded_description")
     desc_html = detail.get("description") or branded or ""
     description_md = _strip_highlight(desc_html) or base.get("description_md")
+    req_md, resp_md = _extract_sections_from_description(description_md or "")
 
     skills_raw = detail.get("key_skills") or []
     skills = [s.get("name", "") for s in skills_raw if isinstance(s, dict) and s.get("name")]
@@ -102,6 +124,8 @@ def enrich_from_detail(base: dict[str, Any], detail: dict[str, Any]) -> dict[str
         {
             "raw_payload": detail,
             "description_md": description_md,
+            "requirements_md": req_md or base.get("requirements_md"),
+            "responsibilities_md": resp_md or base.get("responsibilities_md"),
             "skills": skills,
             "experience": exp,
             "employment": emp,

@@ -353,40 +353,18 @@ def run_cover_letter(
         requirements=requirements or "",
         resume=resume_md,
     )
-    prov = get_effective_llm_provider(db)
-
-    if prov == "none":
-        record_llm_call(db)
-        return (
-            f"Здравствуйте!\n\nПишу по вакансии **{title}** в **{company}**. "
-            f"Кратко о релевантном опыте см. резюме ниже.\n\n_(Режим без LLM.)_",
-            "stub-no-llm",
-        )
-
-    if prov == "gigachat" and gigachat_ready(db):
+    if gigachat_ready(db):
         try:
             model, text = _gigachat_chat_text(db, COVER_LETTER_SYSTEM, user)
             return text.strip(), model
         except Exception:
-            logger.exception("GigaChat cover letter failed, falling back")
-
-    if prov == "openai" and _resolve_openai_key(db):
-        try:
-            model, text = _openai_chat_text(db, COVER_LETTER_SYSTEM, user)
-            return text.strip(), model
-        except Exception:
-            logger.exception("OpenAI cover letter failed")
-
-    if prov == "gigachat" and _resolve_openai_key(db):
-        try:
-            model, text = _openai_chat_text(db, COVER_LETTER_SYSTEM, user)
-            return text.strip(), model
-        except Exception:
-            logger.exception("OpenAI cover letter fallback failed")
+            logger.exception("GigaChat cover letter failed")
 
     record_llm_call(db)
     return (
         f"Здравствуйте!\n\nПишу по вакансии **{title}** в **{company}**. "
-        f"Кратко о релевантном опыте см. резюме ниже.\n\n_(Черновик без API-ключа OpenAI.)_",
-        "stub-no-key",
+        f"По моему резюме у меня есть релевантный опыт для этой роли. "
+        f"Мне интересна возможность развиваться в задачах вашей команды.\n\n"
+        f"Буду рад(а) обсудить детали на интервью.",
+        "stub-no-gigachat",
     )
