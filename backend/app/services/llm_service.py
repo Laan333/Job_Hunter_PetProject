@@ -36,6 +36,25 @@ class MatchAnalysisLLMResult(BaseModel):
     summary_for_notification: str = ""
 
 
+def _md_field_to_string(value: Any) -> str:
+    """Normalize markdown fields from LLM into a single string.
+
+    Some models return arrays of bullet lines instead of a markdown string.
+    """
+
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, list):
+        lines = [str(x).strip() for x in value if str(x).strip()]
+        if not lines:
+            return ""
+        # Keep markdown bullet formatting for readability in UI.
+        return "\n".join(f"- {line}" if not line.startswith(("-", "*", "P")) else line for line in lines)
+    return str(value).strip()
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -150,6 +169,10 @@ def _parse_match_json(text: str) -> MatchAnalysisLLMResult:
             else:
                 repaired = json_repair.repair_json(text, return_objects=False)
                 data = json.loads(str(repaired))
+            if isinstance(data, dict):
+                for md_key in ("strengths_md", "gaps_md", "hr_advice_md"):
+                    if md_key in data:
+                        data[md_key] = _md_field_to_string(data.get(md_key))
             parsed = MatchAnalysisLLMResult.model_validate(data)
             cats = normalize_match_categories(list(parsed.categories))
             return parsed.model_copy(update={"categories": cats})
