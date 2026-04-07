@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,9 +30,11 @@ class Settings(BaseSettings):
     llm_provider: Literal["openai", "gigachat", "none"] = Field(default="openai", alias="LLM_PROVIDER")
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     openai_model: str = Field(default="gpt-3.5-turbo", alias="OPENAI_MODEL")
-    gigachat_auth_key: str = Field(default="", alias="GIGACHAT_AUTH_KEY")
-    gigachat_client_id: str = Field(default="", alias="GIGACHAT_CLIENT_ID")
-    gigachat_client_secret: str = Field(default="", alias="GIGACHAT_CLIENT_SECRET")
+    gigachat_authorization_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("GIGACHAT_AUTHORIZATION_KEY", "GIGACHAT_AUTH_KEY"),
+        description="Ключ авторизации из кабинета GigaChat (вставляется в заголовок Authorization: Basic … при OAuth).",
+    )
     gigachat_oauth_url: str = Field(default="", alias="GIGACHAT_OAUTH_URL")
     gigachat_api_base: str = Field(default="", alias="GIGACHAT_API_BASE")
     gigachat_model: str = Field(default="GigaChat-2", alias="GIGACHAT_MODEL")

@@ -37,7 +37,7 @@ import { fetchSettings, patchSettings } from '@/lib/api'
 export default function SettingsPage() {
   const [settings, setSettings] = useState({
     // API Keys
-    gigachatApiKey: '',
+    gigachatAuthorizationKey: '',
     openaiApiKey: '',
     
     // General
@@ -65,10 +65,14 @@ export default function SettingsPage() {
     void (async () => {
       try {
         const d = await fetchSettings()
-        const ak = d.apiKeys as { gigachat?: string; openai?: string } | undefined
+        const ak = d.apiKeys as {
+          gigachatAuthorizationKey?: string
+          gigachat?: string
+          openai?: string
+        } | undefined
         setSettings((prev) => ({
           ...prev,
-          gigachatApiKey: ak?.gigachat ?? '',
+          gigachatAuthorizationKey: ak?.gigachatAuthorizationKey ?? ak?.gigachat ?? '',
           openaiApiKey: ak?.openai ?? '',
           refreshInterval: Number(d.refreshInterval ?? prev.refreshInterval),
           maxVacanciesPerSearch: Number(d.maxVacanciesPerSearch ?? prev.maxVacanciesPerSearch),
@@ -99,8 +103,8 @@ export default function SettingsPage() {
         highMatchThreshold: settings.highMatchThreshold,
         llmProvider: settings.llmProvider,
       }
-      if (settings.gigachatApiKey && !settings.gigachatApiKey.startsWith('****')) {
-        payload.gigachatApiKey = settings.gigachatApiKey
+      if (settings.gigachatAuthorizationKey && !settings.gigachatAuthorizationKey.startsWith('****')) {
+        payload.gigachatAuthorizationKey = settings.gigachatAuthorizationKey
       }
       if (settings.openaiApiKey && !settings.openaiApiKey.startsWith('****')) {
         payload.openaiApiKey = settings.openaiApiKey
@@ -151,11 +155,11 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* GigaChat API */}
+              {/* GigaChat — Authorization Key из личного кабинета */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="gigachatApiKey" className="text-base font-medium">
-                    GigaChat API (Сбер)
+                  <Label htmlFor="gigachatAuthorizationKey" className="text-base font-medium">
+                    GigaChat — Authorization Key
                   </Label>
                   {testResults.gigachat && (
                     <Badge className={cn(
@@ -169,23 +173,26 @@ export default function SettingsPage() {
                 </div>
                 <div className="flex gap-2">
                   <Input
-                    id="gigachatApiKey"
+                    id="gigachatAuthorizationKey"
                     type="password"
-                    placeholder="Введите API ключ GigaChat"
-                    value={settings.gigachatApiKey}
-                    onChange={(e) => setSettings(prev => ({ ...prev, gigachatApiKey: e.target.value }))}
+                    autoComplete="off"
+                    placeholder="Вставьте Authorization Key из кабинета разработчика GigaChat"
+                    value={settings.gigachatAuthorizationKey}
+                    onChange={(e) => setSettings(prev => ({ ...prev, gigachatAuthorizationKey: e.target.value }))}
                   />
                   <Button 
                     variant="outline" 
                     onClick={() => testApiKey('gigachat')}
-                    disabled={!settings.gigachatApiKey}
+                    disabled={!settings.gigachatAuthorizationKey}
                   >
                     <TestTube className="w-4 h-4 mr-2" />
                     Тест
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Base64-ключ авторизации (как в кабинете GigaChat) или задайте GIGACHAT_CLIENT_ID / SECRET в .env
+                  Поле «Authorization Key» в личном кабинете GigaChat (OAuth:{' '}
+                  <code className="text-foreground">Authorization: Basic …</code>). В .env:{' '}
+                  <code className="text-foreground">GIGACHAT_AUTHORIZATION_KEY</code>.
                 </p>
               </div>
 

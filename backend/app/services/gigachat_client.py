@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import logging
 import uuid
 from dataclasses import dataclass
@@ -29,16 +28,10 @@ _token_state: _TokenState | None = None
 
 
 def _basic_credentials(settings: Settings) -> str | None:
-    """Return Base64(client_id:client_secret) or pre-encoded authorization key."""
+    """Authorization Key из личного кабинета GigaChat (для заголовка `Authorization: Basic …` при OAuth)."""
 
-    raw = (settings.gigachat_auth_key or "").strip()
-    if raw:
-        return raw
-    cid = (settings.gigachat_client_id or "").strip()
-    csec = (settings.gigachat_client_secret or "").strip()
-    if cid and csec:
-        return base64.b64encode(f"{cid}:{csec}".encode()).decode("ascii")
-    return None
+    raw = (settings.gigachat_authorization_key or "").strip()
+    return raw or None
 
 
 def gigachat_configured(settings: Settings) -> bool:

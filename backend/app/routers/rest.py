@@ -86,7 +86,12 @@ class SearchPatch(BaseModel):
 class SettingsPatch(BaseModel):
     """Dashboard settings (camelCase for frontend)."""
 
-    gigachat_api_key: str | None = Field(default=None, alias="gigachatApiKey")
+    gigachat_authorization_key: str | None = Field(default=None, alias="gigachatAuthorizationKey")
+    gigachat_api_key: str | None = Field(
+        default=None,
+        alias="gigachatApiKey",
+        description="Deprecated: то же, что Authorization Key; используйте gigachatAuthorizationKey.",
+    )
     openai_api_key: str | None = Field(default=None, alias="openaiApiKey")
     refresh_interval: int | None = Field(default=None, alias="refreshInterval")
     auto_analyze: bool | None = Field(default=None, alias="autoAnalyze")
@@ -224,13 +229,25 @@ def delete_search(
     return {"ok": "true"}
 
 
+def _gigachat_authorization_key_resolved(db: Session) -> str:
+    """Authorization Key из БД (новый ключ) или из env; legacy `gigachat_api_key`."""
+
+    s = get_settings()
+    return (
+        get_str(db, "gigachat_authorization_key", "").strip()
+        or get_str(db, "gigachat_api_key", "").strip()
+        or (s.gigachat_authorization_key or "").strip()
+    )
+
+
 def _settings_response(db: Session) -> dict[str, Any]:
     ensure_defaults(db)
     s = get_settings()
-    gk = get_str(db, "gigachat_api_key", "") or s.gigachat_auth_key
+    gk = _gigachat_authorization_key_resolved(db)
     ok = get_str(db, "openai_api_key", "") or s.openai_api_key
     return {
         "apiKeys": {
+            "gigachatAuthorizationKey": _mask_secret(gk),
             "gigachat": _mask_secret(gk),
             "openai": _mask_secret(ok),
         },
@@ -274,8 +291,13 @@ def patch_settings(
 ) -> dict[str, Any]:
     ensure_defaults(db)
     raw = body.model_dump(exclude_unset=True, by_alias=False)
+    gc_new = raw.pop("gigachat_authorization_key", None)
+    gc_old = raw.pop("gigachat_api_key", None)
+    if gc_new is not None or gc_old is not None:
+        gc_val = gc_new if (gc_new is not None and gc_new != "") else gc_old
+        if gc_val is not None and gc_val != "":
+            set_value(db, "gigachat_authorization_key", gc_val)
     key_map = {
-        "gigachat_api_key": "gigachat_api_key",
         "openai_api_key": "openai_api_key",
         "refresh_interval": "refresh_interval",
         "auto_analyze": "auto_analyze",
@@ -297,7 +319,7 @@ def patch_settings(
         if pydantic_key not in raw:
             continue
         val = raw[pydantic_key]
-        if pydantic_key in ("gigachat_api_key", "openai_api_key") and (val is None or val == ""):
+        if pydantic_key == "openai_api_key" and (val is None or val == ""):
             continue
         if pydantic_key == "llm_provider" and val is not None:
             v = str(val).lower().strip()

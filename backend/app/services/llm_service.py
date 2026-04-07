@@ -51,13 +51,22 @@ def _resolve_openai_key(db: Session) -> str:
     return get_str(db, "openai_api_key", "").strip()
 
 
+def _gigachat_authorization_key_from_db(db: Session) -> str:
+    """Dashboard stores Authorization Key; поддерживается старый ключ `gigachat_api_key`."""
+
+    return (
+        get_str(db, "gigachat_authorization_key", "").strip()
+        or get_str(db, "gigachat_api_key", "").strip()
+    )
+
+
 def _settings_for_gigachat(db: Session) -> Settings:
-    """Overlay dashboard `gigachat_api_key` (Base64 auth) on env settings."""
+    """Overlay dashboard Authorization Key on env settings."""
 
     s = get_settings()
-    db_key = get_str(db, "gigachat_api_key", "").strip()
+    db_key = _gigachat_authorization_key_from_db(db)
     if db_key:
-        return s.model_copy(update={"gigachat_auth_key": db_key})
+        return s.model_copy(update={"gigachat_authorization_key": db_key})
     return s
 
 

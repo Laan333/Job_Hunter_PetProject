@@ -80,6 +80,9 @@ export interface SearchQuery {
 // Типы для настроек
 export interface Settings {
   apiKeys: {
+    /** Маска Authorization Key (GigaChat, личный кабинет Сбера). */
+    gigachatAuthorizationKey?: string
+    /** @deprecated то же значение, что gigachatAuthorizationKey */
     gigachat?: string
     openai?: string
   }
