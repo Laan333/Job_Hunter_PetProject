@@ -206,9 +206,10 @@ export function VacancyDetailModal({
             className="flex-1 min-w-[200px] gap-2"
             disabled={!onGenerateCoverLetter}
             onClick={() => onGenerateCoverLetter?.(vacancy)}
+            title="Сопроводительное письмо или ответы на вопросы"
           >
             <Sparkles className="w-4 h-4" />
-            Сгенерировать сопроводительное
+            Письмо или вопросы
           </Button>
           <Button
             variant={vacancy.status === 'applied' ? 'secondary' : 'outline'}

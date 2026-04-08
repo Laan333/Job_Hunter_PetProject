@@ -394,7 +394,7 @@ export default function MatchScoresPage() {
                       onClick={() => setCoverLetterVacancy(v)}
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      Письмо
+                      Письмо / вопросы
                     </Button>
                     <Button size="sm" variant="ghost" asChild>
                       <a href={v.url} target="_blank" rel="noopener noreferrer" className="gap-1 inline-flex items-center">

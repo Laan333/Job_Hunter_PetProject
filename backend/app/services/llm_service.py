@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.config import Settings, get_settings
 from app.keyword_taxonomy_v15 import normalize_match_categories
 from app.prompts.cover import COVER_LETTER_SYSTEM, COVER_LETTER_USER_TEMPLATE
+from app.prompts.vacancy_screening_qa import SCREENING_QA_SYSTEM, SCREENING_QA_USER_TEMPLATE
 from app.prompts_v15_1 import MATCH_ANALYSIS_SYSTEM, MATCH_ANALYSIS_USER_TEMPLATE
 from app.services import gigachat_client
 from app.settings_service import ensure_defaults, get_int, get_str, get_value, set_value
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 PROMPT_VERSION_MATCH = "v15_4"
 PROMPT_VERSION_COVER = "cover_v1"
+PROMPT_VERSION_SCREENING_QA = "screening_qa_v1"
 
 
 class MatchAnalysisLLMResult(BaseModel):
@@ -394,3 +396,40 @@ def run_cover_letter(
         f"Буду рад(а) обсудить детали на интервью.",
         "stub-no-gigachat",
     )
+
+
+def run_screening_qa_gigachat(
+    db: Session,
+    *,
+    vacancy_markdown: str,
+    resume_md: str,
+    employer_questions: str,
+) -> tuple[str, str]:
+    """Answer employer screening questions using **only** GigaChat (no OpenAI fallback).
+
+    Returns:
+        Tuple of (markdown answers, model name).
+
+    Raises:
+        RuntimeError: If GigaChat is not configured or the call fails.
+        ValueError: If ``employer_questions`` is empty or too short after strip.
+    """
+
+    q = employer_questions.strip()
+    if len(q) < 3:
+        raise ValueError("Введите вопросы работодателя (не менее 3 символов).")
+    if not gigachat_ready(db):
+        raise RuntimeError(
+            "GigaChat не настроен: укажите Authorization Key в настройках или переменную окружения.",
+        )
+    user = SCREENING_QA_USER_TEMPLATE.format(
+        vacancy=vacancy_markdown.strip(),
+        resume=resume_md.strip(),
+        questions=q,
+    )
+    try:
+        model, text = _gigachat_chat_text(db, SCREENING_QA_SYSTEM, user)
+        return text.strip(), model
+    except Exception as e:
+        logger.exception("GigaChat screening Q&A failed")
+        raise RuntimeError(str(e)) from e

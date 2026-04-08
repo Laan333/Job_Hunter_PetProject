@@ -63,6 +63,15 @@ class CoverLetterBody(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class VacancyScreeningQABody(BaseModel):
+    """Employer questions from the application form; answered via GigaChat only."""
+
+    questions: str = Field(..., min_length=3, max_length=20_000)
+    resume_id: UUID | None = Field(default=None, alias="resumeId")
+
+    model_config = {"populate_by_name": True}
+
+
 def _resume_markdown(r: Resume) -> str:
     parts = [
         f"# {r.position}\n",
@@ -73,6 +82,37 @@ def _resume_markdown(r: Resume) -> str:
         ", ".join(str(x) for x in (r.skills or [])),
     ]
     return "\n".join(parts)
+
+
+def _vacancy_markdown_bundle(v: Vacancy) -> str:
+    """All vacancy fields useful for answering screening questions."""
+
+    lines: list[str] = [f"# {v.title}", "", f"**Компания:** {v.company}", f"**Локация:** {v.location}"]
+    if v.experience:
+        lines.append(f"**Опыт (из карточки):** {v.experience}")
+    if v.employment:
+        lines.append(f"**Занятость:** {v.employment}")
+    if v.schedule:
+        lines.append(f"**График:** {v.schedule}")
+    sal_bits: list[str] = []
+    if v.salary_from is not None:
+        sal_bits.append(f"от {v.salary_from}")
+    if v.salary_to is not None:
+        sal_bits.append(f"до {v.salary_to}")
+    if sal_bits:
+        cur = v.salary_currency or "RUR"
+        gross_note = " (до вычета налогов)" if v.salary_gross else ""
+        lines.append(f"**Зарплата:** {' — '.join(sal_bits)} {cur}{gross_note}")
+    skills = ", ".join(str(s) for s in (v.skills or []) if s)
+    if skills:
+        lines.append(f"**Навыки:** {skills}")
+    lines.extend(["", "## Описание", (v.description_md or "_нет_").strip() or "_нет_"])
+    if (v.requirements_md or "").strip():
+        lines.extend(["", "## Требования", v.requirements_md.strip()])
+    if (v.responsibilities_md or "").strip():
+        lines.extend(["", "## Обязанности", v.responsibilities_md.strip()])
+    lines.extend(["", f"**URL:** {v.url}"])
+    return "\n".join(lines)
 
 
 @router.get("/")
@@ -268,6 +308,57 @@ def post_cover_letter(
     db.add(v)
     db.commit()
     return {"coverLetter": text, "model": model}
+
+
+@router.post("/{vacancy_id}/screening-answers")
+def post_screening_answers(
+    vacancy_id: UUID,
+    body: VacancyScreeningQABody,
+    db: Session = Depends(get_db),
+    _t: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """Answer employer form questions using GigaChat (resume + full vacancy context)."""
+
+    v = db.get(Vacancy, vacancy_id)
+    if v is None:
+        raise HTTPException(status_code=404, detail="Vacancy not found")
+    if body.resume_id:
+        resume = db.get(Resume, body.resume_id)
+    else:
+        resume = db.query(Resume).filter(Resume.is_active.is_(True)).order_by(Resume.updated_at.desc()).first()
+    if resume is None:
+        raise HTTPException(status_code=400, detail="No resume found")
+
+    _rate_limit_http(db)
+    vacancy_md = _vacancy_markdown_bundle(v)
+    resume_md = _resume_markdown(resume)
+    try:
+        text, model = llm_service.run_screening_qa_gigachat(
+            db,
+            vacancy_markdown=vacancy_md,
+            resume_md=resume_md,
+            employer_questions=body.questions,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except RuntimeError as e:
+        logger.error("Screening Q&A unavailable: %s", e)
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("Screening Q&A failed")
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+    logger.info(
+        "screening_answers vacancy=%s model=%s prompt=%s",
+        vacancy_id,
+        model,
+        llm_service.PROMPT_VERSION_SCREENING_QA,
+    )
+    return {
+        "answers": text,
+        "model": model,
+        "promptVersion": llm_service.PROMPT_VERSION_SCREENING_QA,
+    }
 
 
 @router.post("/{vacancy_id}/analyze")

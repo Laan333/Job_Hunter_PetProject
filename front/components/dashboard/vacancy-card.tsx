@@ -255,9 +255,10 @@ export function VacancyCard({
             size="sm"
             onClick={() => onGenerateCoverLetter?.(vacancy)}
             className="flex-1 min-w-[120px]"
+            title="Сопроводительное письмо или ответы на вопросы (GigaChat)"
           >
             <Sparkles className="w-4 h-4 mr-2" />
-            Сопроводительное
+            Письмо / вопросы
           </Button>
           <Button
             variant="outline"

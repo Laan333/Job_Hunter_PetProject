@@ -108,6 +108,21 @@ export async function postCoverLetter(vacancyId: string, resumeId?: string): Pro
   return parseJson(r)
 }
 
+export async function postScreeningAnswers(
+  vacancyId: string,
+  questions: string,
+  resumeId?: string,
+): Promise<{ answers: string; model: string; promptVersion: string }> {
+  const r = await apiFetch(`/vacancies/${vacancyId}/screening-answers`, {
+    method: 'POST',
+    body: JSON.stringify({
+      questions: questions.trim(),
+      ...(resumeId ? { resumeId } : {}),
+    }),
+  })
+  return parseJson(r)
+}
+
 export async function postAnalyze(vacancyId: string): Promise<{
   analysis: {
     id: string
