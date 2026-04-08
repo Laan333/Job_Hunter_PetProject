@@ -184,6 +184,11 @@ export type LlmStatusDto = {
   provider: string
   llmCallAllowed: boolean
   retryAfterSeconds: number
+  /** Отдельный счётчик для GigaChat (не блокируется вызовами OpenAI). */
+  gigachatCallAllowed?: boolean
+  gigachatRetryAfterSeconds?: number
+  openaiCallAllowed?: boolean
+  openaiRetryAfterSeconds?: number
   openaiConfigured: boolean
   gigachatConfigured: boolean
   llmMinIntervalSeconds: number

@@ -20,7 +20,11 @@ from app.serializers import analysis_to_dict, vacancy_to_dict
 from app.services import hh_client
 from app.services.hh_mapper import enrich_from_detail
 from app.services import llm_service
-from app.services.llm_service import assert_llm_slot
+from app.services.llm_service import (
+    assert_provider_slot,
+    assert_slot_for_cover_letter,
+    assert_slot_for_match_analysis,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,19 +34,43 @@ MAX_VACANCIES_PAGE_SIZE = 500
 router = APIRouter(prefix="/vacancies", tags=["vacancies"])
 
 
-def _rate_limit_http(db: Session) -> None:
+def _rate_limit_http_match_analysis(db: Session) -> None:
+    """Интервал для анализа вакансии (bucket OpenAI или GigaChat по настройкам)."""
+
     try:
-        assert_llm_slot(db)
+        assert_slot_for_match_analysis(db)
     except PermissionError as e:
-        msg = str(e)
-        if msg.startswith("RATE_LIMIT:"):
-            wait = int(msg.split(":")[1])
-            raise HTTPException(
-                status_code=429,
-                detail={"message": "LLM rate limit", "retryAfterSeconds": wait},
-                headers={"Retry-After": str(wait)},
-            ) from e
-        raise
+        _raise_429_from_rate_limit(e)
+
+
+def _rate_limit_http_cover_letter(db: Session) -> None:
+    """Интервал только для GigaChat (письмо); заглушка без API не учитывается."""
+
+    try:
+        assert_slot_for_cover_letter(db)
+    except PermissionError as e:
+        _raise_429_from_rate_limit(e)
+
+
+def _rate_limit_http_gigachat(db: Session) -> None:
+    """Интервал только для GigaChat (ответы на вопросы и т.п.)."""
+
+    try:
+        assert_provider_slot(db, "gigachat")
+    except PermissionError as e:
+        _raise_429_from_rate_limit(e)
+
+
+def _raise_429_from_rate_limit(e: PermissionError) -> None:
+    msg = str(e)
+    if msg.startswith("RATE_LIMIT:"):
+        wait = int(msg.split(":")[1])
+        raise HTTPException(
+            status_code=429,
+            detail={"message": "LLM rate limit", "retryAfterSeconds": wait},
+            headers={"Retry-After": str(wait)},
+        ) from e
+    raise
 
 
 class VacancyPatchBody(BaseModel):
@@ -282,7 +310,7 @@ def post_cover_letter(
     if resume is None:
         raise HTTPException(status_code=400, detail="No resume found")
 
-    _rate_limit_http(db)
+    _rate_limit_http_cover_letter(db)
     try:
         text, model = llm_service.run_cover_letter(
             db,
@@ -329,7 +357,7 @@ def post_screening_answers(
     if resume is None:
         raise HTTPException(status_code=400, detail="No resume found")
 
-    _rate_limit_http(db)
+    _rate_limit_http_gigachat(db)
     vacancy_md = _vacancy_markdown_bundle(v)
     resume_md = _resume_markdown(resume)
     try:
@@ -374,7 +402,7 @@ def post_analyze(
     if resume is None:
         raise HTTPException(status_code=400, detail="No active resume")
 
-    _rate_limit_http(db)
+    _rate_limit_http_match_analysis(db)
     try:
         parsed, raw, model = llm_service.run_match_analysis(
             db,

@@ -96,7 +96,9 @@ export function CoverLetterModal({ vacancy, onClose, onSaved }: CoverLetterModal
       toast.success("Сопроводительное сгенерировано")
     } catch (e) {
       if (e instanceof ApiError && e.status === 429) {
-        toast.message("Лимит LLM", { description: `Повторите через ${retryAfterFromApiError(e)} с` })
+        toast.message("Пауза GigaChat", {
+          description: `Подождите ${retryAfterFromApiError(e)} с. Письмо генерируется через GigaChat; лимит не связан с OpenAI.`,
+        })
       } else {
         toast.error("Не удалось сгенерировать письмо")
       }
@@ -119,7 +121,9 @@ export function CoverLetterModal({ vacancy, onClose, onSaved }: CoverLetterModal
       toast.success("Ответы сгенерированы (GigaChat)")
     } catch (e) {
       if (e instanceof ApiError && e.status === 429) {
-        toast.message("Лимит LLM", { description: `Повторите через ${retryAfterFromApiError(e)} с` })
+        toast.message("Пауза GigaChat", {
+          description: `Подождите ${retryAfterFromApiError(e)} с. Это интервал между запросами к GigaChat, не к OpenAI.`,
+        })
       } else if (e instanceof ApiError && e.status === 503) {
         toast.error(detailMessageFromApiError(e))
       } else if (e instanceof ApiError && e.status === 400) {

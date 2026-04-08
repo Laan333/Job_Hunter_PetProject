@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.models import AnalysisSource, Notification, Resume, Vacancy, VacancyAnalysis
 from app.services import llm_service
-from app.services.llm_service import try_acquire_llm_slot
+from app.services.llm_service import try_acquire_slot_for_match_analysis
 from app.services.process_events import clear_active, emit_event, set_active
 from app.services.telegram_service import send_message
 from app.settings_service import ensure_defaults, get_bool, get_int, get_value, set_value
@@ -98,7 +98,7 @@ def run_scheduled_matching(db: Session) -> dict[str, int]:
     notifications = 0
     total = len(candidates)
     for idx, v in enumerate(candidates, start=1):
-        allowed, wait = try_acquire_llm_slot(db)
+        allowed, wait = try_acquire_slot_for_match_analysis(db)
         if not allowed:
             logger.info("Scheduled match: LLM rate limit, stop batch (retry in %ss)", wait)
             emit_event(

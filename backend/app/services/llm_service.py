@@ -111,37 +111,17 @@ def get_effective_llm_provider(db: Session) -> Literal["openai", "gigachat", "no
     return s.llm_provider  # type: ignore[return-value]
 
 
-def get_llm_status(db: Session) -> dict[str, Any]:
-    """Expose rate-limit window and credential flags for the UI."""
-
-    ensure_defaults(db)
-    s = get_settings()
-    allowed, wait = try_acquire_llm_slot(db)
-    prov = get_effective_llm_provider(db)
-    return {
-        "provider": prov,
-        "llmCallAllowed": allowed,
-        "retryAfterSeconds": 0 if allowed else wait,
-        "openaiConfigured": bool(_resolve_openai_key(db)),
-        "gigachatConfigured": gigachat_ready(db),
-        "llmMinIntervalSeconds": get_int(db, "llm_min_interval_seconds", s.default_llm_min_interval_seconds),
-    }
+_SETTING_LAST_GIGACHAT = "last_llm_gigachat_at"
+_SETTING_LAST_OPENAI = "last_llm_openai_at"
 
 
-def assert_llm_slot(db: Session) -> None:
-    """Raise PermissionError RATE_LIMIT:N if calls are too frequent."""
-
-    allowed, wait = try_acquire_llm_slot(db)
-    if not allowed:
-        raise PermissionError(f"RATE_LIMIT:{wait}")
-
-
-def try_acquire_llm_slot(db: Session) -> tuple[bool, int]:
-    """Return (allowed, retry_after_seconds)."""
+def try_acquire_provider_slot(db: Session, provider: Literal["gigachat", "openai"]) -> tuple[bool, int]:
+    """Per-provider cooldown (GigaChat и OpenAI не блокируют друг друга)."""
 
     ensure_defaults(db)
     min_sec = get_int(db, "llm_min_interval_seconds", get_settings().default_llm_min_interval_seconds)
-    raw = get_value(db, "last_llm_call_at", None)
+    key = _SETTING_LAST_GIGACHAT if provider == "gigachat" else _SETTING_LAST_OPENAI
+    raw = get_value(db, key, None)
     if not raw:
         return True, 0
     try:
@@ -154,10 +134,75 @@ def try_acquire_llm_slot(db: Session) -> tuple[bool, int]:
     return True, 0
 
 
-def record_llm_call(db: Session) -> None:
-    """Persist last LLM call timestamp."""
+def assert_provider_slot(db: Session, provider: Literal["gigachat", "openai"]) -> None:
+    """Raise PermissionError ``RATE_LIMIT:N`` if this provider's slot is busy."""
 
-    set_value(db, "last_llm_call_at", _now_iso())
+    allowed, wait = try_acquire_provider_slot(db, provider)
+    if not allowed:
+        raise PermissionError(f"RATE_LIMIT:{wait}")
+
+
+def record_provider_call(db: Session, provider: Literal["gigachat", "openai"]) -> None:
+    """Record last successful call for rate limiting."""
+
+    key = _SETTING_LAST_GIGACHAT if provider == "gigachat" else _SETTING_LAST_OPENAI
+    set_value(db, key, _now_iso())
+
+
+def try_acquire_slot_for_match_analysis(db: Session) -> tuple[bool, int]:
+    """Cooldown for match analysis: bucket of the provider that will run first."""
+
+    prov = get_effective_llm_provider(db)
+    if prov == "none":
+        return True, 0
+    if prov == "openai":
+        return try_acquire_provider_slot(db, "openai")
+    if prov == "gigachat":
+        if gigachat_ready(db):
+            return try_acquire_provider_slot(db, "gigachat")
+        if _resolve_openai_key(db):
+            return try_acquire_provider_slot(db, "openai")
+        return True, 0
+    return True, 0
+
+
+def assert_slot_for_match_analysis(db: Session) -> None:
+    """Rate limit before ``run_match_analysis``."""
+
+    allowed, wait = try_acquire_slot_for_match_analysis(db)
+    if not allowed:
+        raise PermissionError(f"RATE_LIMIT:{wait}")
+
+
+def assert_slot_for_cover_letter(db: Session) -> None:
+    """Rate limit before cover letter: only when real GigaChat call is possible."""
+
+    if not gigachat_ready(db):
+        return
+    assert_provider_slot(db, "gigachat")
+
+
+def get_llm_status(db: Session) -> dict[str, Any]:
+    """Expose rate-limit window and credential flags for the UI."""
+
+    ensure_defaults(db)
+    s = get_settings()
+    prov = get_effective_llm_provider(db)
+    ma_allowed, ma_wait = try_acquire_slot_for_match_analysis(db)
+    gc_allowed, gc_wait = try_acquire_provider_slot(db, "gigachat")
+    oa_allowed, oa_wait = try_acquire_provider_slot(db, "openai")
+    return {
+        "provider": prov,
+        "llmCallAllowed": ma_allowed,
+        "retryAfterSeconds": 0 if ma_allowed else ma_wait,
+        "gigachatCallAllowed": gc_allowed,
+        "gigachatRetryAfterSeconds": 0 if gc_allowed else gc_wait,
+        "openaiCallAllowed": oa_allowed,
+        "openaiRetryAfterSeconds": 0 if oa_allowed else oa_wait,
+        "openaiConfigured": bool(_resolve_openai_key(db)),
+        "gigachatConfigured": gigachat_ready(db),
+        "llmMinIntervalSeconds": get_int(db, "llm_min_interval_seconds", s.default_llm_min_interval_seconds),
+    }
 
 
 def _parse_match_json(text: str) -> MatchAnalysisLLMResult:
@@ -208,7 +253,7 @@ def _openai_chat_json(db: Session, system: str, user: str) -> tuple[str, str]:
         r.raise_for_status()
         body = r.json()
     content = body["choices"][0]["message"]["content"]
-    record_llm_call(db)
+    record_provider_call(db, "openai")
     return model, content
 
 
@@ -235,7 +280,7 @@ def _openai_chat_text(db: Session, system: str, user: str) -> tuple[str, str]:
         r.raise_for_status()
         body = r.json()
     content = body["choices"][0]["message"]["content"]
-    record_llm_call(db)
+    record_provider_call(db, "openai")
     return model, content
 
 
@@ -265,7 +310,7 @@ def _gigachat_chat_json(db: Session, system: str, user: str) -> tuple[str, str]:
             temperature=0.3,
             response_format=None,
         )
-    record_llm_call(db)
+    record_provider_call(db, "gigachat")
     return model, content
 
 
@@ -284,7 +329,7 @@ def _gigachat_chat_text(db: Session, system: str, user: str) -> tuple[str, str]:
         temperature=0.5,
         response_format=None,
     )
-    record_llm_call(db)
+    record_provider_call(db, "gigachat")
     return model, content
 
 
@@ -333,7 +378,6 @@ def run_match_analysis(
 
     if prov == "none":
         parsed, raw, model = _stub_match_result()
-        record_llm_call(db)
         return parsed, raw, model
 
     if prov == "gigachat" and gigachat_ready(db):
@@ -361,7 +405,6 @@ def run_match_analysis(
             logger.exception("OpenAI fallback after GigaChat failure also failed")
 
     parsed, raw, model = _stub_match_result()
-    record_llm_call(db)
     return parsed, raw, model
 
 
@@ -388,7 +431,6 @@ def run_cover_letter(
         except Exception:
             logger.exception("GigaChat cover letter failed")
 
-    record_llm_call(db)
     return (
         f"Здравствуйте!\n\nПишу по вакансии **{title}** в **{company}**. "
         f"По моему резюме у меня есть релевантный опыт для этой роли. "
