@@ -1,4 +1,4 @@
-# Find Work — дашборд поиска работы
+# JobHunter — дашборд поиска работы
 
 Full-stack приложение для сбора вакансий (hh.ru), хранения в PostgreSQL, анализа совпадения с резюме через LLM (OpenAI / GigaChat), уведомлений и Telegram. Веб-интерфейс на Next.js, API на FastAPI, обратный прокси — nginx в Docker.
 
