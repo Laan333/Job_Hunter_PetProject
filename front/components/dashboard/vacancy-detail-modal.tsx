@@ -22,16 +22,27 @@ import {
   Users,
   Eye,
   Brain,
-  Sparkles
+  Sparkles,
+  Send,
+  Undo2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface VacancyDetailModalProps {
   vacancy: Vacancy | null
   onClose: () => void
+  onGenerateCoverLetter?: (vacancy: Vacancy) => void
+  onToggleFavorite?: (vacancy: Vacancy) => void
+  onToggleApplied?: (vacancy: Vacancy) => void
 }
 
-export function VacancyDetailModal({ vacancy, onClose }: VacancyDetailModalProps) {
+export function VacancyDetailModal({
+  vacancy,
+  onClose,
+  onGenerateCoverLetter,
+  onToggleFavorite,
+  onToggleApplied,
+}: VacancyDetailModalProps) {
   if (!vacancy) return null
 
   const formatSalary = (salary?: Vacancy['salary']) => {
@@ -187,10 +198,32 @@ export function VacancyDetailModal({ vacancy, onClose }: VacancyDetailModalProps
         </ScrollArea>
 
         {/* Actions */}
-        <div className="flex items-center gap-3 pt-4 border-t border-border">
-          <Button className="flex-1 gap-2">
+        <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-border">
+          <Button
+            className="flex-1 min-w-[200px] gap-2"
+            disabled={!onGenerateCoverLetter}
+            onClick={() => onGenerateCoverLetter?.(vacancy)}
+          >
             <Sparkles className="w-4 h-4" />
             Сгенерировать сопроводительное
+          </Button>
+          <Button
+            variant={vacancy.status === 'applied' ? 'secondary' : 'outline'}
+            className="gap-2"
+            disabled={!onToggleApplied}
+            onClick={() => onToggleApplied?.(vacancy)}
+          >
+            {vacancy.status === 'applied' ? (
+              <>
+                <Undo2 className="w-4 h-4" />
+                Снять отметку отклика
+              </>
+            ) : (
+              <>
+                <Send className="w-4 h-4" />
+                Откликнулся
+              </>
+            )}
           </Button>
           <Button variant="outline" className="gap-2" asChild>
             <a href={vacancy.url} target="_blank" rel="noopener noreferrer">
@@ -198,11 +231,19 @@ export function VacancyDetailModal({ vacancy, onClose }: VacancyDetailModalProps
               Открыть на HH
             </a>
           </Button>
-          <Button variant="ghost" size="icon">
-            <Star className={cn(
-              "w-5 h-5",
-              vacancy.isFavorite && "fill-current text-chart-5"
-            )} />
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={!onToggleFavorite}
+            onClick={() => onToggleFavorite?.(vacancy)}
+            title={vacancy.isFavorite ? 'Убрать из избранного' : 'В избранное'}
+          >
+            <Star
+              className={cn(
+                'w-5 h-5',
+                vacancy.isFavorite && 'fill-current text-chart-5',
+              )}
+            />
           </Button>
         </div>
       </DialogContent>

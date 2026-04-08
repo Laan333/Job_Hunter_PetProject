@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Header } from '@/components/dashboard/header'
 import { VacancyDetailModal } from '@/components/dashboard/vacancy-detail-modal'
+import { CoverLetterModal } from '@/components/dashboard/cover-letter-modal'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -15,10 +16,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { ApiError, fetchVacancies, fetchVacancy } from '@/lib/api'
+import { ApiError, fetchVacancies, fetchVacancy, patchVacancy } from '@/lib/api'
 import type { Vacancy } from '@/lib/types'
-import { Search, ExternalLink } from 'lucide-react'
+import { Search, ExternalLink, Send, Sparkles, Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 
 export default function MatchScoresPage() {
   const [vacancies, setVacancies] = useState<Vacancy[]>([])
@@ -28,6 +30,7 @@ export default function MatchScoresPage() {
   const [fitPreset, setFitPreset] = useState<'all' | 'stretch' | 'high'>('all')
   const [relevantOnly, setRelevantOnly] = useState<boolean>(true)
   const [selectedVacancy, setSelectedVacancy] = useState<Vacancy | null>(null)
+  const [coverLetterVacancy, setCoverLetterVacancy] = useState<Vacancy | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -88,9 +91,41 @@ export default function MatchScoresPage() {
     try {
       const full = await fetchVacancy(vacancy.id)
       setSelectedVacancy(full)
+      setVacancies((prev) => prev.map((x) => (x.id === full.id ? { ...x, ...full } : x)))
     } catch {
       // keep list payload as fallback
     }
+  }
+
+  const handleToggleFavorite = async (vacancy: Vacancy) => {
+    const next = !vacancy.isFavorite
+    try {
+      const updated = await patchVacancy(vacancy.id, { isFavorite: next })
+      setVacancies((prev) => prev.map((x) => (x.id === vacancy.id ? updated : x)))
+      if (selectedVacancy?.id === vacancy.id) setSelectedVacancy(updated)
+    } catch {
+      toast.error('Не удалось обновить избранное')
+    }
+  }
+
+  const handleToggleApplied = async (vacancy: Vacancy) => {
+    const nextStatus = vacancy.status === 'applied' ? 'viewed' : 'applied'
+    try {
+      const updated = await patchVacancy(vacancy.id, { status: nextStatus })
+      setVacancies((prev) => prev.map((x) => (x.id === vacancy.id ? updated : x)))
+      if (selectedVacancy?.id === vacancy.id) setSelectedVacancy(updated)
+    } catch {
+      toast.error('Не удалось обновить статус отклика')
+    }
+  }
+
+  const handleCoverSaved = (vacancyId: string, text: string) => {
+    setVacancies((prev) =>
+      prev.map((x) => (x.id === vacancyId ? { ...x, coverLetter: text } : x)),
+    )
+    setSelectedVacancy((prev) =>
+      prev?.id === vacancyId ? { ...prev, coverLetter: text } : prev,
+    )
   }
 
   const scoreBadge = (score: number | null | undefined): { label: string; className: string } => {
@@ -172,50 +207,97 @@ export default function MatchScoresPage() {
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          {sorted.map((v) => (
-            <Card key={v.id} className="border-border/50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center justify-between gap-3">
-                  <span className="truncate">{v.title}</span>
-                  <div className="flex items-center gap-2">
-                    <Badge>{v.matchScore}/100</Badge>
-                    <Badge variant="secondary" className={scoreBadge(v.matchScore).className}>
-                      {scoreBadge(v.matchScore).label}
-                    </Badge>
+          {sorted.map((v) => {
+            const applied = v.status === 'applied'
+            return (
+              <Card
+                key={v.id}
+                className={cn('border-border/50', applied && 'opacity-75 bg-muted/30')}
+              >
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center justify-between gap-3">
+                    <span className="truncate flex items-center gap-2 min-w-0">
+                      {applied && (
+                        <span className="shrink-0 text-chart-2" title="Вы откликнулись">
+                          <Send className="w-4 h-4" aria-hidden />
+                        </span>
+                      )}
+                      <span className="truncate">{v.title}</span>
+                    </span>
+                    <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+                      <Badge>{v.matchScore}/100</Badge>
+                      <Badge variant="secondary" className={scoreBadge(v.matchScore).className}>
+                        {scoreBadge(v.matchScore).label}
+                      </Badge>
+                      {applied && (
+                        <Badge variant="secondary" className="bg-chart-2/10 text-chart-2">
+                          Отклик
+                        </Badge>
+                      )}
+                    </div>
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">{v.company}</p>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {(v.skills || []).slice(0, 6).map((s) => (
+                      <Badge key={s} variant="outline" className="text-xs">
+                        {s}
+                      </Badge>
+                    ))}
                   </div>
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">{v.company}</p>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex flex-wrap gap-2">
-                  {(v.skills || []).slice(0, 6).map((s) => (
-                    <Badge key={s} variant="outline" className="text-xs">
-                      {s}
-                    </Badge>
-                  ))}
-                </div>
-                {v.aiAnalysis && <p className="text-sm text-muted-foreground">{v.aiAnalysis}</p>}
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={() => void handleOpenDetails(v)}>
-                    Подробнее
-                  </Button>
-                  <Button size="sm" variant="ghost" asChild>
-                    <a href={v.url} target="_blank" rel="noopener noreferrer" className="gap-1 inline-flex items-center">
-                      HH
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  {v.aiAnalysis && <p className="text-sm text-muted-foreground">{v.aiAnalysis}</p>}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button size="sm" variant="outline" onClick={() => void handleOpenDetails(v)}>
+                      Подробнее
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={applied ? 'secondary' : 'outline'}
+                      className="gap-1"
+                      onClick={() => void handleToggleApplied(v)}
+                    >
+                      {applied ? <Undo2 className="w-3.5 h-3.5" /> : <Send className="w-3.5 h-3.5" />}
+                      {applied ? 'Снять метку' : 'Откликнулся'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1"
+                      onClick={() => setCoverLetterVacancy(v)}
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      Письмо
+                    </Button>
+                    <Button size="sm" variant="ghost" asChild>
+                      <a href={v.url} target="_blank" rel="noopener noreferrer" className="gap-1 inline-flex items-center">
+                        HH
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
 
         {!loading && sorted.length === 0 && (
           <div className="text-sm text-muted-foreground">Нет проанализированных вакансий с баллами.</div>
         )}
       </div>
-      <VacancyDetailModal vacancy={selectedVacancy} onClose={() => setSelectedVacancy(null)} />
+      <VacancyDetailModal
+        vacancy={selectedVacancy}
+        onClose={() => setSelectedVacancy(null)}
+        onGenerateCoverLetter={setCoverLetterVacancy}
+        onToggleFavorite={handleToggleFavorite}
+        onToggleApplied={handleToggleApplied}
+      />
+      <CoverLetterModal
+        vacancy={coverLetterVacancy}
+        onClose={() => setCoverLetterVacancy(null)}
+        onSaved={handleCoverSaved}
+      />
     </div>
   )
 }

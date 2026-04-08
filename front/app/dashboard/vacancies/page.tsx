@@ -39,8 +39,8 @@ export default function VacanciesPage() {
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [llmCooldownSeconds, setLlmCooldownSeconds] = useState(0)
-  const [openedFromLink, setOpenedFromLink] = useState(false)
   const loadMoreRef = useRef<HTMLDivElement | null>(null)
+  const linkVacancyId = searchParams.get('vacancyId')
   const PAGE_SIZE = 40
 
   const selectedSearchKeyword = useMemo(() => {
@@ -124,22 +124,25 @@ export default function VacanciesPage() {
   }, [loadVacancies, loading, loadingMore, page, total, vacancies.length])
 
   useEffect(() => {
-    const vacancyId = searchParams.get('vacancyId')
-    if (!vacancyId || openedFromLink) return
-    setOpenedFromLink(true)
+    if (!linkVacancyId) return
+    let cancelled = false
     void (async () => {
       try {
-        const full = await fetchVacancy(vacancyId)
+        const full = await fetchVacancy(linkVacancyId)
+        if (cancelled) return
         setSelectedVacancy(full)
         setVacancies((prev) => {
           const exists = prev.some((v) => v.id === full.id)
           return exists ? prev.map((v) => (v.id === full.id ? { ...v, ...full } : v)) : [full, ...prev]
         })
       } catch {
-        toast.error('Не удалось открыть вакансию по ссылке')
+        if (!cancelled) toast.error('Не удалось открыть вакансию по ссылке')
       }
     })()
-  }, [openedFromLink, searchParams])
+    return () => {
+      cancelled = true
+    }
+  }, [linkVacancyId])
 
   const filteredVacancies = vacancies
     .filter((v) => {
@@ -172,8 +175,19 @@ export default function VacanciesPage() {
       const updated = await patchVacancy(vacancy.id, { isFavorite: next })
       setVacancies((prev) => prev.map((v) => (v.id === vacancy.id ? updated : v)))
       if (selectedVacancy?.id === vacancy.id) setSelectedVacancy(updated)
-    } catch (e) {
+    } catch {
       toast.error('Не удалось обновить избранное')
+    }
+  }
+
+  const handleToggleApplied = async (vacancy: Vacancy) => {
+    const nextStatus = vacancy.status === 'applied' ? 'viewed' : 'applied'
+    try {
+      const updated = await patchVacancy(vacancy.id, { status: nextStatus })
+      setVacancies((prev) => prev.map((v) => (v.id === vacancy.id ? updated : v)))
+      if (selectedVacancy?.id === vacancy.id) setSelectedVacancy(updated)
+    } catch {
+      toast.error('Не удалось обновить статус отклика')
     }
   }
 
@@ -213,6 +227,9 @@ export default function VacanciesPage() {
   const handleCoverSaved = (vacancyId: string, text: string) => {
     setVacancies((prev) =>
       prev.map((v) => (v.id === vacancyId ? { ...v, coverLetter: text } : v)),
+    )
+    setSelectedVacancy((prev) =>
+      prev?.id === vacancyId ? { ...prev, coverLetter: text } : prev,
     )
   }
 
@@ -378,6 +395,7 @@ export default function VacanciesPage() {
               onViewDetails={(v) => void handleViewDetails(v)}
               onGenerateCoverLetter={setCoverLetterVacancy}
               onToggleFavorite={handleToggleFavorite}
+              onToggleApplied={handleToggleApplied}
               onAnalyze={handleAnalyze}
               onDelete={(v) => void handleDeleteVacancy(v)}
             />
@@ -400,7 +418,13 @@ export default function VacanciesPage() {
         )}
       </div>
 
-      <VacancyDetailModal vacancy={selectedVacancy} onClose={() => setSelectedVacancy(null)} />
+      <VacancyDetailModal
+        vacancy={selectedVacancy}
+        onClose={() => setSelectedVacancy(null)}
+        onGenerateCoverLetter={setCoverLetterVacancy}
+        onToggleFavorite={handleToggleFavorite}
+        onToggleApplied={handleToggleApplied}
+      />
 
       <CoverLetterModal
         vacancy={coverLetterVacancy}

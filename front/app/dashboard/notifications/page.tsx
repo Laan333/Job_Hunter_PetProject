@@ -108,9 +108,9 @@ export default function NotificationsPage() {
                 <SafeMarkdown className="text-sm [&_p]:mb-1">{n.summary}</SafeMarkdown>
                 <div className="flex gap-2 pt-2">
                   <Button variant="outline" size="sm" className="gap-1" asChild>
-                    <Link href={`/dashboard/vacancies`}>
+                    <Link href={`/dashboard/vacancies?vacancyId=${n.vacancyId}`}>
                       <ExternalLink className="w-3 h-3" />
-                      К вакансиям
+                      К вакансии
                     </Link>
                   </Button>
                   {!n.readAt && (

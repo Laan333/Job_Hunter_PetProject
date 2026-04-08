@@ -14,7 +14,9 @@ import {
   Sparkles,
   FileText,
   Brain,
-  Trash2
+  Trash2,
+  Send,
+  Undo2,
 } from 'lucide-react'
 import type { Vacancy } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -26,6 +28,7 @@ interface VacancyCardProps {
   onAnalyze?: (vacancy: Vacancy) => void
   onGenerateCoverLetter?: (vacancy: Vacancy) => void
   onToggleFavorite?: (vacancy: Vacancy) => void
+  onToggleApplied?: (vacancy: Vacancy) => void
   onViewDetails?: (vacancy: Vacancy) => void
   onDelete?: (vacancy: Vacancy) => void
 }
@@ -36,8 +39,9 @@ export function VacancyCard({
   onAnalyze,
   onGenerateCoverLetter,
   onToggleFavorite,
+  onToggleApplied,
   onViewDetails,
-  onDelete
+  onDelete,
 }: VacancyCardProps) {
   const formatSalary = (salary?: Vacancy['salary']) => {
     if (!salary) return 'Не указана'
@@ -66,14 +70,26 @@ export function VacancyCard({
     interview: 'Интервью'
   }
 
+  const isApplied = vacancy.status === 'applied'
+
   return (
-    <Card className="border-border/50 hover:border-primary/30 transition-colors">
+    <Card
+      className={cn(
+        'border-border/50 hover:border-primary/30 transition-colors',
+        isApplied && 'opacity-75 bg-muted/30',
+      )}
+    >
       <CardContent className="p-5">
         {/* Header */}
         <div className="flex items-start justify-between gap-4 mb-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <h3 
+              {isApplied && (
+                <span className="shrink-0 text-chart-2" title="Вы откликнулись">
+                  <Send className="w-4 h-4" aria-hidden />
+                </span>
+              )}
+              <h3
                 className="text-lg font-semibold text-foreground truncate cursor-pointer hover:text-primary transition-colors"
                 onClick={() => onViewDetails?.(vacancy)}
               >
@@ -188,13 +204,13 @@ export function VacancyCard({
         )}
 
         {/* Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {!vacancy.isAnalyzed && (
             <Button
               variant="outline"
               size="sm"
               onClick={() => onAnalyze?.(vacancy)}
-              className="flex-1"
+              className="flex-1 min-w-[120px]"
               disabled={llmCooldownSeconds > 0}
               title={llmCooldownSeconds > 0 ? `Интервал LLM: подождите ${llmCooldownSeconds} с` : undefined}
             >
@@ -203,10 +219,21 @@ export function VacancyCard({
             </Button>
           )}
           <Button
+            variant={isApplied ? 'secondary' : 'outline'}
+            size="sm"
+            className="gap-1"
+            disabled={!onToggleApplied}
+            onClick={() => onToggleApplied?.(vacancy)}
+            title={isApplied ? 'Снять отметку отклика' : 'Отметить, что откликнулись'}
+          >
+            {isApplied ? <Undo2 className="w-4 h-4" /> : <Send className="w-4 h-4" />}
+            {isApplied ? 'Снять метку' : 'Откликнулся'}
+          </Button>
+          <Button
             variant="outline"
             size="sm"
             onClick={() => onGenerateCoverLetter?.(vacancy)}
-            className="flex-1"
+            className="flex-1 min-w-[120px]"
           >
             <Sparkles className="w-4 h-4 mr-2" />
             Сопроводительное

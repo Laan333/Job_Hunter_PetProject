@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -27,6 +27,13 @@ export function CoverLetterModal({ vacancy, onClose, onSaved }: CoverLetterModal
   const [coverLetter, setCoverLetter] = useState('')
   const [isCopied, setIsCopied] = useState(false)
 
+  useEffect(() => {
+    if (!vacancy) return
+    setCoverLetter(vacancy.coverLetter ?? '')
+    setIsGenerating(false)
+    setIsCopied(false)
+  }, [vacancy])
+
   const generateCoverLetter = async () => {
     if (!vacancy) return
     setIsGenerating(true)
@@ -37,8 +44,12 @@ export function CoverLetterModal({ vacancy, onClose, onSaved }: CoverLetterModal
       toast.success('Сопроводительное сгенерировано')
     } catch (e) {
       if (e instanceof ApiError && e.status === 429) {
-        const d = e.body as { detail?: { retryAfterSeconds?: number } }
-        const w = d?.detail?.retryAfterSeconds ?? 60
+        const d = e.body as { detail?: { retryAfterSeconds?: number } | string }
+        const det = d?.detail
+        const w =
+          typeof det === 'object' && det && 'retryAfterSeconds' in det
+            ? Number(det.retryAfterSeconds)
+            : 60
         toast.message('Лимит LLM', { description: `Повторите через ${w} с` })
       } else {
         toast.error('Не удалось сгенерировать письмо')
